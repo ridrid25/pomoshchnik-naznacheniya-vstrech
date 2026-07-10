@@ -1,0 +1,32 @@
+{
+  "name": "pomoshchnik-naznacheniya-vstrech",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telegram-бот для согласования встреч в Google Calendar",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --enable-source-maps dist/main.js",
+    "start:dev": "tsx watch src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run test:e2e",
+    "test:e2e": "npm run build && node --test test/e2e-smoke.mjs"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.1.28",
+    "@nestjs/config": "4.0.4",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/platform-express": "11.1.28",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
