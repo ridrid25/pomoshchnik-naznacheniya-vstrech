@@ -1,0 +1,149 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Test release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run project checks
+        run: npm test
+
+  deploy:
+    name: Deploy to VPS
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST }}
+      VPS_SSH_PORT: ${{ vars.VPS_SSH_PORT }}
+      VPS_SSH_USER: ${{ vars.VPS_SSH_USER }}
+      VPS_APP_DIR: ${{ vars.VPS_APP_DIR }}
+      PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL }}
+    steps:
+      - name: Check out verified release
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Validate deployment configuration
+        env:
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_SSH_PORT VPS_SSH_USER VPS_APP_DIR PUBLIC_HEALTH_URL VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required GitHub Actions setting is empty: $name" >&2
+              exit 1
+            fi
+          done
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS_SSH_PORT" =~ ^[0-9]{1,5}$ ]]
+          [[ "$VPS_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [ "$VPS_APP_DIR" = "/opt/meeting-assistant" ]
+          [[ "$PUBLIC_HEALTH_URL" =~ ^https://[^/]+/health$ ]]
+
+      - name: Configure locked SSH access
+        env:
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" <<EOF
+          Host production-bot
+            HostName $VPS_HOST
+            Port $VPS_SSH_PORT
+            User $VPS_SSH_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+          ssh production-bot true
+
+      - name: Package verified source
+        run: |
+          set -euo pipefail
+          archive="release-${GITHUB_SHA}.tar.gz"
+          tar -czf "$archive" -- \
+            .dockerignore \
+            Caddyfile \
+            Dockerfile \
+            docker-compose.yml \
+            package.json \
+            package-lock.json \
+            prisma.config.ts \
+            tsconfig.json \
+            tsconfig.build.json \
+            prisma \
+            scripts \
+            src
+          echo "RELEASE_ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - name: Upload release to VPS
+        run: |
+          set -euo pipefail
+          remote_archive="/home/${VPS_SSH_USER}/releases/${RELEASE_ARCHIVE}"
+          scp "$RELEASE_ARCHIVE" "production-bot:${remote_archive}"
+          echo "REMOTE_ARCHIVE=$remote_archive" >> "$GITHUB_ENV"
+
+      - name: Deploy release with backup and rollback
+        run: |
+          set -euo pipefail
+          ssh production-bot \
+            "sudo /usr/local/sbin/deploy-meeting-assistant '${REMOTE_ARCHIVE}' '${GITHUB_SHA}' '${VPS_APP_DIR}'"
+
+      - name: Verify public health endpoint
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            response=$(curl --fail --silent --show-error --max-time 10 "$PUBLIC_HEALTH_URL" || true)
+            if printf '%s' "$response" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+              printf 'Production is healthy: %s\n' "$response"
+              exit 0
+            fi
+            echo "Health check attempt ${attempt}/20 is not ready"
+            sleep 3
+          done
+          echo "Production health check failed" >&2
+          exit 1
+
+      - name: Write deployment summary
+        if: success()
+        run: |
+          {
+            echo "### Production deployment succeeded"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Health: ${PUBLIC_HEALTH_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
