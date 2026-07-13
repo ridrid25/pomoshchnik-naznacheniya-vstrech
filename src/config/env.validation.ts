@@ -34,6 +34,8 @@ export function validateEnvironment(
   const googleRedirectUri = String(
     config.GOOGLE_OAUTH_REDIRECT_URI ?? '',
   ).trim();
+  const publicBaseUrl = String(config.PUBLIC_BASE_URL ?? '').trim();
+  const adminActionSecret = String(config.ADMIN_ACTION_SECRET ?? '').trim();
   const smtpHost = String(config.SMTP_HOST ?? '').trim();
   const smtpPort = Number(config.SMTP_PORT ?? 587);
   const smtpSecure = parseBoolean(config.SMTP_SECURE ?? false, 'SMTP_SECURE');
@@ -103,6 +105,29 @@ export function validateEnvironment(
     }
   }
 
+  if (publicBaseUrl) {
+    const baseUrl = new URL(publicBaseUrl);
+    if (baseUrl.pathname !== '/' || baseUrl.search || baseUrl.hash) {
+      throw new Error('PUBLIC_BASE_URL must contain only scheme and host');
+    }
+    if (nodeEnv === 'production' && baseUrl.protocol !== 'https:') {
+      throw new Error('PUBLIC_BASE_URL must use HTTPS in production');
+    }
+  }
+  if ((publicBaseUrl || adminActionSecret) && !(publicBaseUrl && adminActionSecret)) {
+    throw new Error(
+      'PUBLIC_BASE_URL and ADMIN_ACTION_SECRET must be configured together',
+    );
+  }
+  if (adminActionSecret && adminActionSecret.length < 32) {
+    throw new Error('ADMIN_ACTION_SECRET must contain at least 32 characters');
+  }
+  if (nodeEnv === 'production' && googleRedirectUri && !publicBaseUrl) {
+    throw new Error(
+      'PUBLIC_BASE_URL and ADMIN_ACTION_SECRET are required with Google Calendar in production',
+    );
+  }
+
   const smtpValues = [smtpHost, smtpUser, smtpPassword, smtpFrom];
   if (smtpValues.some(Boolean) && !smtpValues.every(Boolean)) {
     throw new Error(
@@ -125,6 +150,8 @@ export function validateEnvironment(
   config.GOOGLE_OAUTH_CLIENT_ID = googleClientId;
   config.GOOGLE_OAUTH_CLIENT_SECRET = googleClientSecret;
   config.GOOGLE_OAUTH_REDIRECT_URI = googleRedirectUri;
+  config.PUBLIC_BASE_URL = publicBaseUrl.replace(/\/$/u, '');
+  config.ADMIN_ACTION_SECRET = adminActionSecret;
   config.SMTP_HOST = smtpHost;
   config.SMTP_PORT = smtpPort;
   config.SMTP_SECURE = smtpSecure;

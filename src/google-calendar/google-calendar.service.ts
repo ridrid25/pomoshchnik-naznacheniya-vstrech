@@ -25,6 +25,11 @@ export interface CreateGoogleEventInput {
   createConference?: boolean;
 }
 
+export interface CreatePendingGoogleEventInput
+  extends Omit<CreateGoogleEventInput, 'attendeeEmail' | 'createConference'> {
+  bookingId: string;
+}
+
 export interface CreatedGoogleEvent {
   googleEventId: string;
   googleMeetUrl: string | null;
@@ -74,6 +79,14 @@ export class GoogleCalendarService {
       authorized: Boolean(token?.refreshToken || token?.accessToken),
       tokenExpiresAt: token?.expiryDate?.toISOString() ?? null,
     };
+  }
+
+  async getAccountEmail(): Promise<string | null> {
+    const token = await this.prisma.googleOAuthToken.findUnique({
+      where: { id: 1 },
+      select: { accountEmail: true },
+    });
+    return token?.accountEmail?.trim() || null;
   }
 
   createAuthorizationUrl(): string {
@@ -189,6 +202,139 @@ export class GoogleCalendarService {
       return { googleEventId: response.data.id, googleMeetUrl: meetUrl };
     } catch (error: unknown) {
       await this.reportFailure('google.event.create_failed', error);
+      throw error;
+    }
+  }
+
+  async createPendingEvent(
+    input: CreatePendingGoogleEventInput,
+  ): Promise<CreatedGoogleEvent> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      const response = await calendar.events.insert({
+        calendarId: this.calendarId,
+        sendUpdates: 'none',
+        requestBody: {
+          summary: `⏳ На согласовании · ${input.title}`,
+          description: input.description,
+          start: { dateTime: input.startAt.toISOString(), timeZone: input.timezone },
+          end: { dateTime: input.endAt.toISOString(), timeZone: input.timezone },
+          status: 'tentative',
+          transparency: 'transparent',
+          colorId: '8',
+          visibility: 'private',
+          reminders: { useDefault: false, overrides: [] },
+          extendedProperties: {
+            private: {
+              bookingId: input.bookingId,
+              bookingState: 'pending_approval',
+            },
+          },
+        },
+      });
+      if (!response.data.id) {
+        throw new Error('Google Calendar returned no pending event id');
+      }
+      this.logger.logEvent('GoogleCalendarService', 'google.pending_event.created', {
+        google_event_id: response.data.id,
+      });
+      return { googleEventId: response.data.id, googleMeetUrl: null };
+    } catch (error: unknown) {
+      await this.reportFailure('google.pending_event.create_failed', error);
+      throw error;
+    }
+  }
+
+  async updatePendingEvent(
+    googleEventId: string,
+    input: CreatePendingGoogleEventInput,
+  ): Promise<void> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      await calendar.events.patch({
+        calendarId: this.calendarId,
+        eventId: googleEventId,
+        sendUpdates: 'none',
+        requestBody: {
+          summary: `⏳ На согласовании · ${input.title}`,
+          description: input.description,
+          start: { dateTime: input.startAt.toISOString(), timeZone: input.timezone },
+          end: { dateTime: input.endAt.toISOString(), timeZone: input.timezone },
+          status: 'tentative',
+          transparency: 'transparent',
+          colorId: '8',
+          visibility: 'private',
+          attendees: [],
+          reminders: { useDefault: false, overrides: [] },
+          extendedProperties: {
+            private: {
+              bookingId: input.bookingId,
+              bookingState: 'pending_approval',
+            },
+          },
+        },
+      });
+      this.logger.logEvent('GoogleCalendarService', 'google.pending_event.updated', {
+        google_event_id: googleEventId,
+      });
+    } catch (error: unknown) {
+      await this.reportFailure('google.pending_event.update_failed', error);
+      throw error;
+    }
+  }
+
+  async confirmPendingEvent(
+    googleEventId: string,
+    input: CreateGoogleEventInput,
+  ): Promise<CreatedGoogleEvent> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      const response = await calendar.events.patch({
+        calendarId: this.calendarId,
+        eventId: googleEventId,
+        conferenceDataVersion: input.createConference === false ? undefined : 1,
+        sendUpdates: 'all',
+        requestBody: {
+          summary: input.title,
+          description: input.description,
+          start: { dateTime: input.startAt.toISOString(), timeZone: input.timezone },
+          end: { dateTime: input.endAt.toISOString(), timeZone: input.timezone },
+          status: 'confirmed',
+          transparency: 'opaque',
+          colorId: '10',
+          attendees: input.attendeeEmail
+            ? [{ email: input.attendeeEmail }]
+            : [],
+          reminders: {
+            useDefault: false,
+            overrides: [{ method: 'popup', minutes: 60 }],
+          },
+          conferenceData:
+            input.createConference === false
+              ? undefined
+              : {
+                  createRequest: {
+                    requestId: randomUUID(),
+                    conferenceSolutionKey: { type: 'hangoutsMeet' },
+                  },
+                },
+          extendedProperties: {
+            private: { bookingState: 'confirmed' },
+          },
+        },
+      });
+      const meetUrl =
+        response.data.hangoutLink ??
+        response.data.conferenceData?.entryPoints?.find(
+          (entry) => entry.entryPointType === 'video',
+        )?.uri ??
+        null;
+      this.logger.logEvent('GoogleCalendarService', 'google.pending_event.confirmed', {
+        google_event_id: googleEventId,
+      });
+      return { googleEventId, googleMeetUrl: meetUrl };
+    } catch (error: unknown) {
+      await this.reportFailure('google.pending_event.confirm_failed', error);
       throw error;
     }
   }

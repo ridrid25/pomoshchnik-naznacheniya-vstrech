@@ -10,4 +10,6 @@ export default registerAs('app', () => ({
   telegramDevPolling: process.env.TELEGRAM_DEV_POLLING === 'true',
   telegramApiRoot: process.env.TELEGRAM_API_ROOT?.trim() || null,
   adminTelegramId: process.env.ADMIN_TELEGRAM_ID?.trim() || null,
+  publicBaseUrl: process.env.PUBLIC_BASE_URL?.trim().replace(/\/$/u, '') || null,
+  adminActionSecret: process.env.ADMIN_ACTION_SECRET?.trim() || null,
 }));

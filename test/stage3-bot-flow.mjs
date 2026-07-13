@@ -92,6 +92,7 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
 
   try {
     await waitForHealth(appPort, child, stdout, stderr);
+    setGoogleAccountEmail(databasePath, 'owner@example.com');
 
     try {
       await sendMessageUpdate(9001, '/start');
@@ -156,6 +157,24 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
     const identifiers = readIdentifiers(databasePath, 9001);
     await sendCallback(
       9002,
+      `admin:booking:${identifiers.bookingId}`,
+      'stage3_admin',
+    );
+    const calendarLink = lastButtonUrl(
+      telegramRequests,
+      '📅 Открыть этот день в Google Calendar',
+    );
+    assert.match(
+      calendarLink,
+      /^https:\/\/calendar\.google\.com\/calendar\/r\/day\/\d{4}\/\d{1,2}\/\d{1,2}\?authuser=owner%40example\.com$/u,
+    );
+    assert.equal(
+      new URL(calendarLink).searchParams.get('authuser'),
+      'owner@example.com',
+    );
+    assert.ok(lastSentText(telegramRequests).includes(calendarLink));
+    await sendCallback(
+      9002,
       `admin:confirm:${identifiers.bookingId}`,
       'stage3_admin',
     );
@@ -218,6 +237,20 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
     }
   }
 });
+
+function setGoogleAccountEmail(databasePath, accountEmail) {
+  const database = new Database(databasePath);
+  try {
+    database
+      .prepare(
+        `INSERT INTO "GoogleOAuthToken" (id, accountEmail, updatedAt)
+         VALUES (1, ?, CURRENT_TIMESTAMP)`,
+      )
+      .run(accountEmail);
+  } finally {
+    database.close();
+  }
+}
 
 function readUser(databasePath, telegramId) {
   const database = new Database(databasePath, { readonly: true });
@@ -402,4 +435,28 @@ function lastCallbackData(requests, prefix) {
     }
   }
   throw new Error(`Callback not found: ${prefix}`);
+}
+
+function lastButtonUrl(requests, label) {
+  for (let index = requests.length - 1; index >= 0; index -= 1) {
+    const request = requests[index];
+    if (request.method !== 'sendMessage') continue;
+    const markup =
+      typeof request.body.reply_markup === 'string'
+        ? JSON.parse(request.body.reply_markup)
+        : request.body.reply_markup;
+    for (const row of markup?.inline_keyboard ?? []) {
+      const button = row.find((item) => item.text === label && item.url);
+      if (button) return button.url;
+    }
+  }
+  throw new Error(`URL button not found: ${label}`);
+}
+
+function lastSentText(requests) {
+  for (let index = requests.length - 1; index >= 0; index -= 1) {
+    const request = requests[index];
+    if (request.method === 'sendMessage') return request.body.text;
+  }
+  throw new Error('Sent text not found');
 }

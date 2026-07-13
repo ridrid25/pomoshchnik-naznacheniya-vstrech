@@ -9,9 +9,11 @@ import {
   MeetingFormat,
   SlotReservationStatus,
   UserStatus,
+  type User,
 } from '../generated/prisma/client';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import { JsonLoggerService } from '../logging/json-logger.service';
+import { AdminReviewTokenService } from './admin-review-token.service';
 
 const BOOKING_TTL_MS = 48 * 60 * 60 * 1000;
 
@@ -44,6 +46,7 @@ export class BookingService {
     private readonly availability: AvailabilityService,
     private readonly googleCalendar: GoogleCalendarService,
     private readonly logger: JsonLoggerService,
+    private readonly reviewTokens: AdminReviewTokenService,
   ) {}
 
   async create(input: CreateBookingInput) {
@@ -91,7 +94,32 @@ export class BookingService {
       include: { user: true },
     });
     this.log('booking.created', booking.id, { user_id: input.userId });
-    return booking;
+    await this.createPendingCalendarMarker(booking);
+    return this.prisma.booking.findUniqueOrThrow({
+      where: { id: booking.id },
+      include: { user: true, calendarEvent: true },
+    });
+  }
+
+  async syncPendingCalendarMarkers(): Promise<number> {
+    if (!this.googleCalendar.isConfigured()) return 0;
+    const pending = await this.prisma.booking.findMany({
+      where: { status: BookingStatus.PENDING_APPROVAL },
+      include: { user: true, calendarEvent: true },
+    });
+    let created = 0;
+    let updated = 0;
+    for (const booking of pending) {
+      const result = await this.createPendingCalendarMarker(booking);
+      if (result === 'created') created += 1;
+      if (result === 'updated') updated += 1;
+    }
+    this.log('booking.pending_calendar.reconciled', undefined, {
+      pending_count: pending.length,
+      created_count: created,
+      updated_count: updated,
+    });
+    return created;
   }
 
   async confirm(bookingId: string): Promise<ConfirmationResult> {
@@ -133,7 +161,7 @@ export class BookingService {
     const endAt = new Date(
       booking.startAt.getTime() + booking.durationMinutes * 60_000,
     );
-    let createdGoogleEventId: string | null = null;
+    let finalizedGoogleEventId: string | null = null;
     try {
       if (
         booking.type === BookingType.RESCHEDULE &&
@@ -143,24 +171,22 @@ export class BookingService {
       ) {
         throw new Error('Original confirmed calendar event is missing');
       }
-      const event = await this.googleCalendar.createEvent({
+      const eventInput = {
         title: booking.title,
-        description: [
-          booking.comment,
-          `Telegram: ${booking.user.telegramDisplayName}`,
-          booking.user.telegramUsername
-            ? `Username: @${booking.user.telegramUsername}`
-            : 'Username: отсутствует',
-        ]
-          .filter(Boolean)
-          .join('\n'),
+        description: this.calendarDescription(booking),
         startAt: booking.startAt,
         endAt,
         timezone: booking.timezone,
         attendeeEmail: booking.emailSnapshot,
         createConference: booking.meetingFormat === MeetingFormat.ONLINE,
-      });
-      createdGoogleEventId = event.googleEventId;
+      };
+      const event = booking.calendarEvent
+        ? await this.googleCalendar.confirmPendingEvent(
+            booking.calendarEvent.googleEventId,
+            eventInput,
+          )
+        : await this.googleCalendar.createEvent(eventInput);
+      finalizedGoogleEventId = event.googleEventId;
       if (booking.type === BookingType.RESCHEDULE && booking.originalBooking) {
         await this.googleCalendar.cancelEvent(
           booking.originalBooking.calendarEvent!.googleEventId,
@@ -171,15 +197,27 @@ export class BookingService {
           where: { id: booking.id },
           data: { status: BookingStatus.CONFIRMED },
         });
-        await transaction.calendarEvent.create({
-          data: {
-            bookingId: booking.id,
-            googleEventId: event.googleEventId,
-            googleMeetUrl: event.googleMeetUrl,
-            guestEmail: booking.emailSnapshot,
-            syncStatus: CalendarSyncStatus.SYNCED,
-          },
-        });
+        if (booking.calendarEvent) {
+          await transaction.calendarEvent.update({
+            where: { bookingId: booking.id },
+            data: {
+              googleMeetUrl: event.googleMeetUrl,
+              guestEmail: booking.emailSnapshot,
+              syncStatus: CalendarSyncStatus.SYNCED,
+              cancelledAt: null,
+            },
+          });
+        } else {
+          await transaction.calendarEvent.create({
+            data: {
+              bookingId: booking.id,
+              googleEventId: event.googleEventId,
+              googleMeetUrl: event.googleMeetUrl,
+              guestEmail: booking.emailSnapshot,
+              syncStatus: CalendarSyncStatus.SYNCED,
+            },
+          });
+        }
         if (booking.type === BookingType.RESCHEDULE && booking.originalBooking) {
           await transaction.booking.update({
             where: { id: booking.originalBooking.id },
@@ -209,8 +247,8 @@ export class BookingService {
         meetUrl: event.googleMeetUrl,
       };
     } catch (error: unknown) {
-      if (createdGoogleEventId) {
-        await this.googleCalendar.cancelEvent(createdGoogleEventId).catch(
+      if (finalizedGoogleEventId) {
+        await this.googleCalendar.cancelEvent(finalizedGoogleEventId).catch(
           (rollbackError: unknown) => {
             this.log('booking.confirmation.rollback_failed', booking.id, {
               error_message:
@@ -224,6 +262,7 @@ export class BookingService {
       await this.finishWithReleasedReservation(
         booking.id,
         BookingStatus.CONFIRMATION_ERROR,
+        Boolean(finalizedGoogleEventId),
       );
       this.log('booking.confirmation.failed', booking.id, {
         error_message: error instanceof Error ? error.message : String(error),
@@ -240,7 +279,7 @@ export class BookingService {
   async reject(bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { user: true },
+      include: { user: true, calendarEvent: true },
     });
     if (!booking) throw new Error('Booking not found');
     await this.finishWithReleasedReservation(
@@ -263,10 +302,7 @@ export class BookingService {
     ) {
       throw new Error(`Booking cannot be cancelled from ${booking.status}`);
     }
-    if (
-      booking.status === BookingStatus.CONFIRMED &&
-      booking.calendarEvent?.googleEventId
-    ) {
+    if (booking.calendarEvent?.googleEventId) {
       await this.googleCalendar.cancelEvent(
         booking.calendarEvent.googleEventId,
       );
@@ -299,9 +335,21 @@ export class BookingService {
         status: BookingStatus.PENDING_APPROVAL,
         expiresAt: { lte: now },
       },
-      select: { id: true, userId: true },
+      select: {
+        id: true,
+        userId: true,
+        calendarEvent: { select: { googleEventId: true } },
+      },
     });
     if (!expired.length) return [];
+    for (const booking of expired) {
+      if (booking.calendarEvent?.googleEventId) {
+        await this.cancelCalendarEventBestEffort(
+          booking.id,
+          booking.calendarEvent.googleEventId,
+        );
+      }
+    }
     const ids = expired.map(({ id }) => id);
     await this.prisma.$transaction([
       this.prisma.booking.updateMany({
@@ -311,6 +359,13 @@ export class BookingService {
       this.prisma.slotReservation.updateMany({
         where: { bookingId: { in: ids } },
         data: { status: SlotReservationStatus.EXPIRED },
+      }),
+      this.prisma.calendarEvent.updateMany({
+        where: { bookingId: { in: ids } },
+        data: {
+          syncStatus: CalendarSyncStatus.CANCELLED,
+          cancelledAt: now,
+        },
       }),
     ]);
     this.log('booking.expiration.completed', undefined, {
@@ -360,6 +415,23 @@ export class BookingService {
     blocked: boolean,
     adminTelegramId: bigint,
   ): Promise<void> {
+    const pending = blocked
+      ? await this.prisma.booking.findMany({
+          where: { userId, status: BookingStatus.PENDING_APPROVAL },
+          select: {
+            id: true,
+            calendarEvent: { select: { googleEventId: true } },
+          },
+        })
+      : [];
+    for (const booking of pending) {
+      if (booking.calendarEvent?.googleEventId) {
+        await this.cancelCalendarEventBestEffort(
+          booking.id,
+          booking.calendarEvent.googleEventId,
+        );
+      }
+    }
     await this.prisma.$transaction(async (transaction) => {
       await transaction.user.update({
         where: { id: userId },
@@ -380,10 +452,6 @@ export class BookingService {
         },
       });
       if (blocked) {
-        const pending = await transaction.booking.findMany({
-          where: { userId, status: BookingStatus.PENDING_APPROVAL },
-          select: { id: true },
-        });
         if (pending.length) {
           const ids = pending.map(({ id }) => id);
           await transaction.booking.updateMany({
@@ -394,6 +462,13 @@ export class BookingService {
             where: { bookingId: { in: ids } },
             data: { status: SlotReservationStatus.RELEASED },
           });
+          await transaction.calendarEvent.updateMany({
+            where: { bookingId: { in: ids } },
+            data: {
+              syncStatus: CalendarSyncStatus.CANCELLED,
+              cancelledAt: new Date(),
+            },
+          });
         }
       }
     });
@@ -402,19 +477,140 @@ export class BookingService {
     });
   }
 
+  private async createPendingCalendarMarker(booking: {
+    id: string;
+    title: string;
+    comment: string | null;
+    startAt: Date;
+    durationMinutes: number;
+    timezone: string;
+    expiresAt: Date;
+    user: User;
+  }): Promise<'created' | 'updated' | 'skipped'> {
+    if (!this.googleCalendar.isConfigured()) return 'skipped';
+    const existing = await this.prisma.calendarEvent.findUnique({
+      where: { bookingId: booking.id },
+      select: { id: true, googleEventId: true },
+    });
+
+    let googleEventId: string | null = null;
+    try {
+      const reviewUrl = this.reviewTokens.createReviewUrl(
+        booking.id,
+        booking.expiresAt,
+      );
+      const input = {
+        bookingId: booking.id,
+        title: booking.title,
+        description: [
+          '⏳ Статус: заявка ожидает вашего решения.',
+          'Эта бледная запись не помечает вас занятой в Google Calendar.',
+          reviewUrl ? '' : null,
+          reviewUrl ? '🔐 Рассмотреть, подтвердить или отклонить:' : null,
+          reviewUrl,
+          '',
+          this.calendarDescription(booking),
+        ].filter((line): line is string => line !== null).join('\n'),
+        startAt: booking.startAt,
+        endAt: new Date(
+          booking.startAt.getTime() + booking.durationMinutes * 60_000,
+        ),
+        timezone: booking.timezone,
+      };
+      if (existing) {
+        await this.googleCalendar.updatePendingEvent(
+          existing.googleEventId,
+          input,
+        );
+        this.log('booking.pending_calendar.updated', booking.id, {
+          google_event_id: existing.googleEventId,
+        });
+        return 'updated';
+      }
+      const event = await this.googleCalendar.createPendingEvent(input);
+      googleEventId = event.googleEventId;
+      await this.prisma.calendarEvent.create({
+        data: {
+          bookingId: booking.id,
+          googleEventId,
+          googleMeetUrl: null,
+          guestEmail: null,
+          syncStatus: CalendarSyncStatus.PENDING,
+        },
+      });
+      this.log('booking.pending_calendar.created', booking.id, {
+        google_event_id: googleEventId,
+      });
+      return 'created';
+    } catch (error: unknown) {
+      if (googleEventId) {
+        await this.cancelCalendarEventBestEffort(booking.id, googleEventId);
+      }
+      this.log('booking.pending_calendar.failed', booking.id, {
+        error_message: error instanceof Error ? error.message : String(error),
+      });
+      return 'skipped';
+    }
+  }
+
+  private calendarDescription(booking: {
+    comment: string | null;
+    user: User;
+  }): string {
+    return [
+      booking.comment,
+      `Telegram: ${booking.user.telegramDisplayName}`,
+      booking.user.telegramUsername
+        ? `Username: @${booking.user.telegramUsername}`
+        : 'Username: отсутствует',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private async cancelCalendarEventBestEffort(
+    bookingId: string,
+    googleEventId: string,
+  ): Promise<void> {
+    await this.googleCalendar.cancelEvent(googleEventId).catch((error: unknown) => {
+      this.log('booking.pending_calendar.cancel_failed', bookingId, {
+        error_message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
   private async finishWithReleasedReservation(
     bookingId: string,
     status: BookingStatus,
+    calendarAlreadyCancelled = false,
   ): Promise<void> {
-    await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status,
-        slotReservation: {
-          update: { status: SlotReservationStatus.RELEASED },
-        },
-      },
+    const calendarEvent = await this.prisma.calendarEvent.findUnique({
+      where: { bookingId },
+      select: { googleEventId: true },
     });
+    if (calendarEvent && !calendarAlreadyCancelled) {
+      await this.cancelCalendarEventBestEffort(
+        bookingId,
+        calendarEvent.googleEventId,
+      );
+    }
+    await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { status },
+      }),
+      this.prisma.slotReservation.updateMany({
+        where: { bookingId },
+        data: { status: SlotReservationStatus.RELEASED },
+      }),
+      this.prisma.calendarEvent.updateMany({
+        where: { bookingId },
+        data: {
+          syncStatus: CalendarSyncStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+      }),
+    ]);
   }
 
   private log(

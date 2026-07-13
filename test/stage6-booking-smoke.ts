@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 
 import { ConfigService } from '@nestjs/config';
 
+import { AdminReviewController } from '../src/bookings/admin-review.controller';
+import { AdminReviewTokenService } from '../src/bookings/admin-review-token.service';
 import { BookingService } from '../src/bookings/booking.service';
 import { createPrismaClient } from '../src/database/prisma-client.factory';
 import { applySqliteMigrations } from '../src/database/sqlite-migrator';
@@ -38,11 +40,41 @@ async function main(): Promise<void> {
     let eventSequence = 0;
     const cancelledGoogleEvents: string[] = [];
     const conferenceChoices: boolean[] = [];
+    const confirmedPendingEvents: string[] = [];
+    const pendingDescriptions: string[] = [];
     const googleCalendar = {
+      isConfigured: () => true,
+      createPendingEvent: async (input: { description: string }) => {
+        pendingDescriptions.push(input.description);
+        return {
+        googleEventId: `stage6-pending-${++eventSequence}`,
+        googleMeetUrl: null,
+        };
+      },
+      updatePendingEvent: async (
+        _googleEventId: string,
+        input: { description: string },
+      ) => {
+        pendingDescriptions.push(input.description);
+      },
+      confirmPendingEvent: async (
+        googleEventId: string,
+        input: { createConference?: boolean },
+      ) => {
+        confirmedPendingEvents.push(googleEventId);
+        conferenceChoices.push(input.createConference !== false);
+        return {
+          googleEventId,
+          googleMeetUrl:
+            input.createConference === false
+              ? null
+              : 'https://meet.google.com/stage-six-test',
+        };
+      },
       createEvent: async (input: { createConference?: boolean }) => {
         conferenceChoices.push(input.createConference !== false);
         return {
-          googleEventId: `stage6-${++eventSequence}`,
+          googleEventId: `stage6-direct-${++eventSequence}`,
           googleMeetUrl:
             input.createConference === false
               ? null
@@ -53,12 +85,95 @@ async function main(): Promise<void> {
         cancelledGoogleEvents.push(googleEventId);
       },
     };
+    const reviewTokens = new AdminReviewTokenService(
+      new ConfigService({
+        app: {
+          publicBaseUrl: 'https://meeting.example.com',
+          adminActionSecret: 'stage6-admin-action-secret-1234567890',
+        },
+      }),
+    );
     const service = new BookingService(
       prisma as never,
       availability as never,
       googleCalendar as never,
       new JsonLoggerService(),
+      reviewTokens,
     );
+
+    const validToken = reviewTokens.createToken(
+      'stage6booking',
+      new Date('2030-02-01T00:00:00.000Z'),
+    );
+    assert.equal(
+      reviewTokens.verifyToken(validToken, new Date('2029-01-01T00:00:00.000Z'))
+        ?.bookingId,
+      'stage6booking',
+    );
+    assert.equal(
+      reviewTokens.verifyToken(
+        `${validToken.slice(0, -1)}x`,
+        new Date('2029-01-01T00:00:00.000Z'),
+      ),
+      null,
+    );
+    assert.equal(
+      reviewTokens.verifyToken(validToken, new Date('2031-01-01T00:00:00.000Z')),
+      null,
+    );
+    const webBooking = {
+      id: 'stage6booking',
+      title: 'Web review smoke',
+      startAt: new Date('2030-02-01T09:00:00.000Z'),
+      durationMinutes: 45,
+      timezone: 'Europe/Moscow',
+      comment: 'Review from Google Calendar',
+      meetingFormat: MeetingFormat.ONLINE,
+      status: BookingStatus.PENDING_APPROVAL,
+      user: {
+        telegramDisplayName: 'Stage 6 user',
+        telegramUsername: 'stage6_user',
+      },
+    };
+    const webDecisions: string[] = [];
+    const reviewController = new AdminReviewController(
+      {
+        booking: {
+          findUnique: async () => webBooking,
+        },
+      } as never,
+      reviewTokens,
+      {
+        decide: async (_bookingId: string, action: string) => {
+          webDecisions.push(action);
+          return {
+            bookingId: 'stage6booking',
+            outcome: action === 'confirm' ? 'CONFIRMED' : 'REJECTED',
+            bookingStatus:
+              action === 'confirm'
+                ? BookingStatus.CONFIRMED
+                : BookingStatus.REJECTED,
+          };
+        },
+      } as never,
+    );
+    const reviewPage = responseRecorder();
+    await reviewController.showReview(validToken, reviewPage.response);
+    assert.equal(reviewPage.status, 200);
+    assert.match(reviewPage.body, /Подтвердить/u);
+    assert.match(reviewPage.body, /Отклонить/u);
+    assert.deepEqual(webDecisions, []);
+    const invalidPage = responseRecorder();
+    await reviewController.showReview(`${validToken}x`, invalidPage.response);
+    assert.equal(invalidPage.status, 403);
+    const decisionPage = responseRecorder();
+    await reviewController.submitDecision(
+      validToken,
+      'confirm',
+      decisionPage.response,
+    );
+    assert.equal(decisionPage.status, 200);
+    assert.deepEqual(webDecisions, ['confirm']);
 
     const first = await service.create({
       userId: user.id,
@@ -68,6 +183,13 @@ async function main(): Promise<void> {
       title: 'Stage 6 confirmation',
     });
     assert.equal(first.emailSnapshot, null);
+    assert.equal(first.calendarEvent?.syncStatus, 'PENDING');
+    assert.equal(first.calendarEvent?.googleEventId, 'stage6-pending-1');
+    assert.ok(
+      pendingDescriptions[0].includes(
+        'https://meeting.example.com/admin/review/',
+      ),
+    );
     const confirmation = await service.confirm(first.id);
     assert.equal(confirmation.status, 'CONFIRMED');
     const confirmed = await prisma.booking.findUniqueOrThrow({
@@ -75,6 +197,9 @@ async function main(): Promise<void> {
       include: { calendarEvent: true, slotReservation: true },
     });
     assert.equal(confirmed.status, BookingStatus.CONFIRMED);
+    assert.equal(confirmed.calendarEvent?.googleEventId, 'stage6-pending-1');
+    assert.equal(confirmed.calendarEvent?.syncStatus, 'SYNCED');
+    assert.ok(confirmedPendingEvents.includes('stage6-pending-1'));
     assert.equal(confirmed.calendarEvent?.guestEmail, null);
     assert.equal(
       confirmed.calendarEvent?.googleMeetUrl,
@@ -99,7 +224,7 @@ async function main(): Promise<void> {
       BookingStatus.CANCELLED_BY_USER,
     );
     assert.equal(originalAfterReschedule.calendarEvent?.syncStatus, 'CANCELLED');
-    assert.ok(cancelledGoogleEvents.includes('stage6-1'));
+    assert.ok(cancelledGoogleEvents.includes('stage6-pending-1'));
 
     await service.cancelByUser(reschedule.id, user.id);
     const cancelled = await prisma.booking.findUniqueOrThrow({
@@ -140,12 +265,16 @@ async function main(): Promise<void> {
     await service.reject(second.id);
     const rejected = await prisma.booking.findUniqueOrThrow({
       where: { id: second.id },
-      include: { slotReservation: true },
+      include: { slotReservation: true, calendarEvent: true },
     });
     assert.equal(rejected.status, BookingStatus.REJECTED);
     assert.equal(
       rejected.slotReservation?.status,
       SlotReservationStatus.RELEASED,
+    );
+    assert.equal(rejected.calendarEvent?.syncStatus, 'CANCELLED');
+    assert.ok(
+      cancelledGoogleEvents.includes(second.calendarEvent!.googleEventId),
     );
 
     const third = await service.create({
@@ -161,7 +290,7 @@ async function main(): Promise<void> {
     });
     const autoRejected = await prisma.booking.findUniqueOrThrow({
       where: { id: third.id },
-      include: { slotReservation: true },
+      include: { slotReservation: true, calendarEvent: true },
     });
     assert.equal(blocked.status, UserStatus.BANNED);
     assert.equal(autoRejected.status, BookingStatus.REJECTED);
@@ -169,6 +298,7 @@ async function main(): Promise<void> {
       autoRejected.slotReservation?.status,
       SlotReservationStatus.RELEASED,
     );
+    assert.equal(autoRejected.calendarEvent?.syncStatus, 'CANCELLED');
     await service.setUserBlocked(user.id, false, 6999n);
     assert.equal(
       (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).status,
@@ -189,13 +319,14 @@ async function main(): Promise<void> {
     assert.equal((await service.expirePending(new Date())).length, 1);
     const expired = await prisma.booking.findUniqueOrThrow({
       where: { id: expiring.id },
-      include: { slotReservation: true },
+      include: { slotReservation: true, calendarEvent: true },
     });
     assert.equal(expired.status, BookingStatus.EXPIRED);
     assert.equal(
       expired.slotReservation?.status,
       SlotReservationStatus.EXPIRED,
     );
+    assert.equal(expired.calendarEvent?.syncStatus, 'CANCELLED');
 
     const logger = new JsonLoggerService();
     const notificationService = new NotificationService(
@@ -313,6 +444,9 @@ async function main(): Promise<void> {
         event: 'stage6.booking.verification.completed',
         create_and_reserve_checked: true,
         google_confirmation_checked: true,
+        pending_calendar_lifecycle_checked: true,
+        signed_calendar_review_link_checked: true,
+        calendar_review_web_page_checked: true,
         optional_email_checked: true,
         rejection_release_checked: true,
         cancellation_checked: true,
@@ -330,6 +464,36 @@ async function main(): Promise<void> {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+function responseRecorder(): {
+  response: never;
+  status: number;
+  body: string;
+} {
+  const recorder = {
+    status: 0,
+    body: '',
+    response: undefined as never,
+  };
+  const response = {
+    status(code: number) {
+      recorder.status = code;
+      return response;
+    },
+    set() {
+      return response;
+    },
+    type() {
+      return response;
+    },
+    send(body: string) {
+      recorder.body = body;
+      return response;
+    },
+  };
+  recorder.response = response as never;
+  return recorder;
 }
 
 void main().catch((error: unknown) => {

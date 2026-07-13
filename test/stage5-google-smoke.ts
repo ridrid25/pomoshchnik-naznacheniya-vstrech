@@ -17,6 +17,7 @@ async function main(): Promise<void> {
   await prisma.$connect();
   const originalCalendar = google.calendar;
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+  let insertedEventSequence = 0;
   try {
     await prisma.googleOAuthToken.create({
       data: {
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
         scope: 'https://www.googleapis.com/auth/calendar',
         tokenType: 'Bearer',
         expiryDate: new Date('2030-01-01T00:00:00.000Z'),
+        accountEmail: 'owner@example.com',
       },
     });
     const fakeCalendar = {
@@ -53,7 +55,7 @@ async function main(): Promise<void> {
           calls.push({ method: 'events.insert', params });
           return {
             data: {
-              id: 'google-stage5-event',
+              id: `google-stage5-event-${++insertedEventSequence}`,
               hangoutLink:
                 params.conferenceDataVersion === 1
                   ? 'https://meet.google.com/stage-five-test'
@@ -63,7 +65,16 @@ async function main(): Promise<void> {
         },
         patch: async (params: Record<string, unknown>) => {
           calls.push({ method: 'events.patch', params });
-          return { data: { id: 'google-stage5-event', status: 'cancelled' } };
+          return {
+            data: {
+              id: params.eventId,
+              status: (params.requestBody as { status?: string })?.status,
+              hangoutLink:
+                params.conferenceDataVersion === 1
+                  ? 'https://meet.google.com/stage-five-pending'
+                  : undefined,
+            },
+          };
         },
       },
     };
@@ -82,6 +93,7 @@ async function main(): Promise<void> {
       config,
       new JsonLoggerService(),
     );
+    assert.equal(await service.getAccountEmail(), 'owner@example.com');
 
     assert.deepEqual(await service.getStatus(), {
       configured: true,
@@ -101,6 +113,66 @@ async function main(): Promise<void> {
     assert.equal(busy.length, 1);
     assert.equal(busy[0]?.start.toISOString(), '2030-01-15T09:00:00.000Z');
 
+    const pending = await service.createPendingEvent({
+      bookingId: 'booking-stage5-pending',
+      title: 'Stage 5 pending',
+      description: 'Awaiting Telegram approval',
+      startAt: new Date('2030-01-15T08:00:00.000Z'),
+      endAt: new Date('2030-01-15T08:30:00.000Z'),
+      timezone: 'Europe/Moscow',
+    });
+    assert.equal(pending.googleEventId, 'google-stage5-event-1');
+    const pendingInsert = calls.find((call) => {
+      const requestBody = call.params.requestBody as { status?: string } | undefined;
+      return call.method === 'events.insert' && requestBody?.status === 'tentative';
+    });
+    const pendingBody = pendingInsert?.params.requestBody as {
+      summary: string;
+      status: string;
+      transparency: string;
+      colorId: string;
+      attendees?: unknown;
+      conferenceData?: unknown;
+    };
+    assert.ok(pendingBody.summary.startsWith('⏳ На согласовании'));
+    assert.equal(pendingBody.status, 'tentative');
+    assert.equal(pendingBody.transparency, 'transparent');
+    assert.equal(pendingBody.colorId, '8');
+    assert.equal(pendingBody.attendees, undefined);
+    assert.equal(pendingBody.conferenceData, undefined);
+
+    const confirmedPending = await service.confirmPendingEvent(
+      pending.googleEventId,
+      {
+        title: 'Stage 5 confirmed pending',
+        description: 'Approved in Telegram',
+        startAt: new Date('2030-01-15T08:00:00.000Z'),
+        endAt: new Date('2030-01-15T08:30:00.000Z'),
+        timezone: 'Europe/Moscow',
+        attendeeEmail: 'stage5@example.com',
+        createConference: true,
+      },
+    );
+    assert.deepEqual(confirmedPending, {
+      googleEventId: 'google-stage5-event-1',
+      googleMeetUrl: 'https://meet.google.com/stage-five-pending',
+    });
+    const pendingPatch = calls.find((call) => {
+      const requestBody = call.params.requestBody as { status?: string } | undefined;
+      return call.method === 'events.patch' && requestBody?.status === 'confirmed';
+    });
+    const confirmedPendingBody = pendingPatch?.params.requestBody as {
+      status: string;
+      transparency: string;
+      colorId: string;
+      attendees: Array<{ email: string }>;
+      conferenceData: { createRequest: { requestId: string } };
+    };
+    assert.equal(confirmedPendingBody.transparency, 'opaque');
+    assert.equal(confirmedPendingBody.colorId, '10');
+    assert.equal(confirmedPendingBody.attendees[0]?.email, 'stage5@example.com');
+    assert.ok(confirmedPendingBody.conferenceData.createRequest.requestId);
+
     const created = await service.createEvent({
       title: 'Stage 5 test',
       description: 'Telegram user: Stage 5',
@@ -110,10 +182,10 @@ async function main(): Promise<void> {
       attendeeEmail: 'stage5@example.com',
     });
     assert.deepEqual(created, {
-      googleEventId: 'google-stage5-event',
+      googleEventId: 'google-stage5-event-2',
       googleMeetUrl: 'https://meet.google.com/stage-five-test',
     });
-    const insert = calls.find((call) => call.method === 'events.insert');
+    const insert = calls.filter((call) => call.method === 'events.insert')[1];
     assert.equal(insert?.params.conferenceDataVersion, 1);
     assert.equal(insert?.params.sendUpdates, 'all');
     const body = insert?.params.requestBody as {
@@ -136,7 +208,7 @@ async function main(): Promise<void> {
     });
     const insertWithoutEmail = calls.filter(
       (call) => call.method === 'events.insert',
-    )[1];
+    )[2];
     const bodyWithoutEmail = insertWithoutEmail?.params.requestBody as {
       attendees?: Array<{ email: string }>;
       conferenceData?: unknown;
@@ -146,8 +218,11 @@ async function main(): Promise<void> {
     assert.equal(bodyWithoutEmail.conferenceData, undefined);
 
     await service.cancelEvent(created.googleEventId);
-    const cancellation = calls.find((call) => call.method === 'events.patch');
-    assert.equal(cancellation?.params.eventId, 'google-stage5-event');
+    const cancellation = calls.find((call) => {
+      const requestBody = call.params.requestBody as { status?: string } | undefined;
+      return call.method === 'events.patch' && requestBody?.status === 'cancelled';
+    });
+    assert.equal(cancellation?.params.eventId, 'google-stage5-event-2');
     assert.deepEqual(cancellation?.params.requestBody, { status: 'cancelled' });
 
     process.stdout.write(
@@ -161,6 +236,7 @@ async function main(): Promise<void> {
         meet_checked: true,
         in_person_without_meet_checked: true,
         cancellation_checked: true,
+        pending_event_lifecycle_checked: true,
       })}\n`,
     );
   } finally {

@@ -10,7 +10,7 @@
     "start": "node --enable-source-maps dist/main.js",
     "start:dev": "tsx watch src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run test:e2e && npm run db:smoke && npm run availability:smoke && npm run google:smoke && npm run booking:smoke",
+    "test": "npm run test:e2e && npm run db:smoke && npm run availability:smoke && npm run google:smoke && npm run booking:smoke && npm run deploy:smoke",
     "test:e2e": "npm run build && node --test test/e2e-smoke.mjs test/stage3-bot-flow.mjs",
     "prisma:format": "prisma format",
     "prisma:generate": "prisma generate",
@@ -24,6 +24,7 @@
     "google:smoke": "node scripts/verify-stage5.mjs",
     "google:live": "tsx scripts/verify-google-live.ts",
     "booking:smoke": "node scripts/verify-stage6.mjs",
+    "deploy:smoke": "node scripts/verify-stage7.mjs",
     "db:backup": "tsx scripts/backup-sqlite.ts"
   },
   "dependencies": {

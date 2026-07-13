@@ -25,6 +25,9 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    void this.bookings.syncPendingCalendarMarkers().catch((error: unknown) =>
+      this.logFailure('scheduler.pending_calendar_sync.failed', error),
+    );
     this.expirationTimer = setInterval(() => {
       void this.expireAndNotify().catch((error: unknown) =>
         this.logFailure('scheduler.expiration.failed', error),

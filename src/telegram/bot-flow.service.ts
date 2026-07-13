@@ -18,10 +18,12 @@ import {
   type AvailableWeek,
 } from '../availability/availability.service';
 import { BookingService } from '../bookings/booking.service';
+import { BookingDecisionService } from '../bookings/booking-decision.service';
 import { PrismaService } from '../database/prisma.service';
 import {
   BookingStatus,
   BookingType,
+  CalendarSyncStatus,
   MessageTemplateType,
   MeetingFormat,
   NotificationChannel,
@@ -77,6 +79,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
     private readonly logger: JsonLoggerService,
     private readonly googleCalendar: GoogleCalendarService,
     private readonly bookings: BookingService,
+    private readonly bookingDecisions: BookingDecisionService,
     private readonly notifications: NotificationService,
   ) {
     const token = config.get<string | null>('app.telegramBotToken');
@@ -588,13 +591,15 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       if (!admin) return;
       const booking = await this.prisma.booking.findUnique({
         where: { id: ctx.match[1] },
-        include: { user: true },
+        include: { user: true, calendarEvent: true },
       });
       if (!booking) {
         await ctx.reply('Заявка не найдена.');
         return;
       }
       const { date, time } = localDateTime(booking.startAt, booking.timezone);
+      const calendarAccountEmail = await this.googleCalendar.getAccountEmail();
+      const calendarUrl = googleCalendarDayUrl(date, calendarAccountEmail);
       const slotAvailable =
         booking.status === BookingStatus.PENDING_APPROVAL
           ? await this.availability.isSlotAvailable(
@@ -613,15 +618,23 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
           .row();
       }
       keyboard
-        .url('📅 Открыть этот день в Google Calendar', googleCalendarDayUrl(date))
+        .url('📅 Открыть этот день в Google Calendar', calendarUrl)
         .row()
         .text('🚫 Заблокировать', `admin:block:${booking.userId}`)
         .text('🔓 Разблокировать', `admin:unblock:${booking.userId}`)
         .row()
         .text('← К списку', 'admin:bookings');
-      await ctx.reply(formatAdminBooking(booking, slotAvailable), {
-        reply_markup: keyboard,
-      });
+      await ctx.reply(
+        [
+          formatAdminBooking(booking, slotAvailable),
+          '',
+          'Если кнопка не откроется, нажмите или скопируйте ссылку в браузер:',
+          calendarUrl,
+        ].join('\n'),
+        {
+          reply_markup: keyboard,
+        },
+      );
     });
 
     bot.callbackQuery(/^admin:(confirm|reject):([a-z0-9]+)$/u, async (ctx) => {
@@ -629,67 +642,20 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       const admin = await this.ensureAdmin(ctx);
       if (!admin) return;
       const bookingId = ctx.match[2];
-      if (ctx.match[1] === 'confirm') {
-        const result = await this.bookings.confirm(bookingId);
-        this.logFlow('admin.booking.status.changed', admin, {
-          booking_id: bookingId,
-          booking_status: result.status,
-        });
-        const currentBooking = await this.prisma.booking.findUniqueOrThrow({
-          where: { id: bookingId },
-        });
-        if (result.status === 'CONFIRMED') {
-          await this.notifications.notifyUser({
-            userId: result.userId,
-            bookingId,
-            eventType: 'BOOKING_CONFIRMED',
-            templateType: MessageTemplateType.BOOKING_CONFIRMED,
-            subject: 'Встреча подтверждена',
-            fallbackText:
-              'Встреча подтверждена. Дата: {date}. Время: {time} ({tz_label}). Длительность: {duration} мин. Формат: {meeting_format}. {meeting_note}',
-            variables: bookingTemplateVariables(currentBooking),
-          });
-          await ctx.reply('✅ Заявка подтверждена, встреча создана в Google Calendar.');
-        } else if (result.status === 'SLOT_UNAVAILABLE') {
-          await this.notifications.notifyUser({
-            userId: result.userId,
-            bookingId,
-            eventType: 'SLOT_UNAVAILABLE',
-            templateType: MessageTemplateType.SLOT_UNAVAILABLE,
-            subject: 'Время встречи стало недоступно',
-            fallbackText:
-              'Выбранное время стало недоступно. Создайте новую заявку.',
-          });
-          await ctx.reply('Слот уже недоступен. Заявка закрыта, резерв снят.');
-        } else {
-          await this.notifications.notifyUser({
-            userId: result.userId,
-            bookingId,
-            eventType: 'CONFIRMATION_ERROR',
-            templateType: MessageTemplateType.CONFIRMATION_ERROR,
-            subject: 'Не удалось подтвердить встречу',
-            fallbackText:
-              'Не удалось подтвердить встречу из-за технической ошибки. Администратор уже получил уведомление.',
-          });
-          await ctx.reply('Не удалось создать событие Google Calendar. Заявка помечена как ошибка подтверждения, резерв снят.');
-        }
-        return;
-      }
-      const booking = await this.bookings.reject(bookingId);
+      const action = ctx.match[1] === 'confirm' ? 'confirm' : 'reject';
+      const result = await this.bookingDecisions.decide(bookingId, action);
       this.logFlow('admin.booking.status.changed', admin, {
-        booking_id: booking.id,
-        booking_status: BookingStatus.REJECTED,
+        booking_id: bookingId,
+        booking_status: result.bookingStatus,
       });
-      await this.notifications.notifyUser({
-        userId: booking.userId,
-        bookingId: booking.id,
-        eventType: 'BOOKING_REJECTED',
-        templateType: MessageTemplateType.BOOKING_REJECTED,
-        subject: 'Заявка на встречу отклонена',
-        fallbackText: 'Заявка отклонена. {reason_optional}',
-        variables: { reason_optional: booking.rejectionReason ?? '' },
-      });
-      await ctx.reply('Заявка отклонена, резерв времени снят.');
+      const replies = {
+        CONFIRMED: '✅ Заявка подтверждена, встреча создана в Google Calendar.',
+        REJECTED: 'Заявка отклонена, резерв времени снят.',
+        SLOT_UNAVAILABLE: 'Слот уже недоступен. Заявка закрыта, резерв снят.',
+        CONFIRMATION_ERROR: 'Не удалось создать событие Google Calendar. Заявка помечена как ошибка подтверждения, резерв снят.',
+        ALREADY_PROCESSED: 'Эта заявка уже обработана. Повторное действие не выполнено.',
+      } as const;
+      await ctx.reply(replies[result.outcome]);
     });
 
     bot.callbackQuery(/^admin:(block|unblock):([a-z0-9]+)$/u, async (ctx) => {
@@ -1077,6 +1043,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
     status: BookingStatus;
     meetingFormat: MeetingFormat;
     user: User;
+    calendarEvent: { syncStatus: CalendarSyncStatus } | null;
   }): Promise<void> {
     if (!this.bot || !this.adminTelegramId) return;
     try {
@@ -1353,6 +1320,7 @@ function formatAdminBooking(
     comment: string | null;
     emailSnapshot: string | null;
     user: User;
+    calendarEvent?: { syncStatus: CalendarSyncStatus } | null;
   },
   slotAvailable: boolean | null,
 ): string {
@@ -1375,6 +1343,9 @@ function formatAdminBooking(
     `📍 ${meetingFormatLabel(booking.meetingFormat)}`,
     `📋 ${statusLabel(booking.status)}`,
     slotLine,
+    booking.calendarEvent?.syncStatus === CalendarSyncStatus.PENDING
+      ? '⬜ В календаре: бледная запись «⏳ На согласовании»'
+      : null,
     '',
     `👤 ${booking.user.telegramDisplayName}`,
     booking.user.telegramUsername
@@ -1494,9 +1465,16 @@ function localDateTime(value: Date, timeZone: string): { date: string; time: str
   };
 }
 
-function googleCalendarDayUrl(date: string): string {
+function googleCalendarDayUrl(
+  date: string,
+  accountEmail: string | null,
+): string {
   const [year, month, day] = date.split('-').map(Number);
-  return `https://calendar.google.com/calendar/u/0/r/day/${year}/${month}/${day}`;
+  const url = new URL(
+    `https://calendar.google.com/calendar/r/day/${year}/${month}/${day}`,
+  );
+  if (accountEmail) url.searchParams.set('authuser', accountEmail);
+  return url.toString();
 }
 
 function statusIcon(status: BookingStatus): string {
