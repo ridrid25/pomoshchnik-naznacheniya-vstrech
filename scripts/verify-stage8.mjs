@@ -39,6 +39,7 @@ requireMarkers('workflow', [
   'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
   'actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e',
   'npm ci',
+  'cp .env.production.example .env.production',
   'npm test',
   'VPS_SSH_PRIVATE_KEY',
   'VPS_KNOWN_HOSTS',
@@ -76,7 +77,7 @@ requireMarkers('docs', [
   'VPS_SSH_PRIVATE_KEY',
   'VPS_KNOWN_HOSTS',
   'PUBLIC_HEALTH_URL',
-  'автоматический откат',
+  'Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ РѕС‚РєР°С‚',
   '.env.production',
 ]);
 
@@ -86,7 +87,10 @@ if ((contents.workflow ?? '').match(/uses:\s+[^\s]+@(main|master|v\d+)/)) {
 if ((contents.workflow ?? '').includes('git pull')) {
   failures.push(`${files.workflow}: deployment must use the verified archive, not git pull`);
 }
-if ((contents.workflow ?? '').match(/\.env(?:\.production)?(?:\s|\\|$)/)) {
+const packageBlock = (contents.workflow ?? '').match(
+  /- name: Package verified source([\s\S]*?)- name: Upload release to VPS/,
+)?.[1] ?? '';
+if (packageBlock.match(/\.env(?:\.production)?(?:\s|\\|$)/)) {
   failures.push(`${files.workflow}: environment files must not be included in the release archive`);
 }
 if ((contents.deploy ?? '').match(/docker\s+(?:system|image|builder)\s+prune/)) {
@@ -100,3 +104,4 @@ if (failures.length > 0) {
 }
 
 console.log(`Stage 8 CI/CD verification passed (${Object.keys(files).length} artifacts).`);
+
