@@ -1,0 +1,305 @@
+import { randomBytes, randomUUID } from 'node:crypto';
+
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { google, type calendar_v3 } from 'googleapis';
+
+import { PrismaService } from '../database/prisma.service';
+import { JsonLoggerService } from '../logging/json-logger.service';
+
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+const OAUTH_STATE_TTL_MS = 10 * 60_000;
+
+export interface BusyInterval {
+  start: Date;
+  end: Date;
+}
+
+export interface CreateGoogleEventInput {
+  title: string;
+  description: string;
+  startAt: Date;
+  endAt: Date;
+  timezone: string;
+  attendeeEmail?: string | null;
+  createConference?: boolean;
+}
+
+export interface CreatedGoogleEvent {
+  googleEventId: string;
+  googleMeetUrl: string | null;
+}
+
+interface TokenCredentials {
+  access_token?: string | null;
+  refresh_token?: string | null;
+  scope?: string;
+  token_type?: string | null;
+  expiry_date?: number | null;
+}
+
+@Injectable()
+export class GoogleCalendarService {
+  private readonly clientId: string | null;
+  private readonly clientSecret: string | null;
+  private readonly redirectUri: string | null;
+  private readonly calendarId: string;
+  private readonly oauthStates = new Map<string, number>();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly logger: JsonLoggerService,
+  ) {
+    this.clientId = config.get<string | null>('google.clientId') ?? null;
+    this.clientSecret = config.get<string | null>('google.clientSecret') ?? null;
+    this.redirectUri = config.get<string | null>('google.redirectUri') ?? null;
+    this.calendarId = config.get<string>('google.calendarId') ?? 'primary';
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.clientId && this.clientSecret && this.redirectUri);
+  }
+
+  async getStatus(): Promise<{
+    configured: boolean;
+    authorized: boolean;
+    tokenExpiresAt: string | null;
+  }> {
+    const token = await this.prisma.googleOAuthToken.findUnique({
+      where: { id: 1 },
+    });
+    return {
+      configured: this.isConfigured(),
+      authorized: Boolean(token?.refreshToken || token?.accessToken),
+      tokenExpiresAt: token?.expiryDate?.toISOString() ?? null,
+    };
+  }
+
+  createAuthorizationUrl(): string {
+    const oauth = this.createOAuthClient();
+    const state = randomBytes(32).toString('hex');
+    this.oauthStates.set(state, Date.now() + OAUTH_STATE_TTL_MS);
+    this.cleanupExpiredStates();
+    this.logger.logEvent('GoogleCalendarService', 'google.oauth.started');
+    return oauth.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      include_granted_scopes: true,
+      scope: [GOOGLE_CALENDAR_SCOPE],
+      state,
+    });
+  }
+
+  async handleOAuthCallback(code: string, state: string): Promise<void> {
+    const expiresAt = this.oauthStates.get(state);
+    this.oauthStates.delete(state);
+    if (!expiresAt || expiresAt < Date.now()) {
+      throw new Error('Google OAuth state is invalid or expired');
+    }
+    const oauth = this.createOAuthClient();
+    const existing = await this.prisma.googleOAuthToken.findUnique({
+      where: { id: 1 },
+    });
+    const { tokens } = await oauth.getToken(code);
+    await this.persistTokens(tokens, existing?.refreshToken ?? null);
+    this.logger.logEvent('GoogleCalendarService', 'google.oauth.completed', {
+      token_expiry: tokens.expiry_date ?? null,
+    });
+  }
+
+  async getBusyIntervals(
+    timeMin: Date,
+    timeMax: Date,
+    timezone: string,
+  ): Promise<BusyInterval[]> {
+    if (!this.isConfigured()) return [];
+    try {
+      const calendar = await this.authorizedCalendar();
+      const response = await calendar.freebusy.query(
+        {
+          requestBody: {
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            timeZone: timezone,
+            items: [{ id: this.calendarId }],
+          },
+        },
+        { timeout: 10_000 },
+      );
+      const calendarData = response.data.calendars?.[this.calendarId];
+      if (calendarData?.errors?.length) {
+        throw new Error('Google Calendar returned free/busy errors');
+      }
+      const intervals = (calendarData?.busy ?? []).flatMap((interval) =>
+        interval.start && interval.end
+          ? [{ start: new Date(interval.start), end: new Date(interval.end) }]
+          : [],
+      );
+      this.logger.logEvent('GoogleCalendarService', 'google.freebusy.completed', {
+        busy_interval_count: intervals.length,
+      });
+      return intervals;
+    } catch (error: unknown) {
+      await this.reportFailure('google.freebusy.failed', error);
+      throw error;
+    }
+  }
+
+  async createEvent(input: CreateGoogleEventInput): Promise<CreatedGoogleEvent> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      const response = await calendar.events.insert({
+        calendarId: this.calendarId,
+        conferenceDataVersion: input.createConference === false ? undefined : 1,
+        sendUpdates: 'all',
+        requestBody: {
+          summary: input.title,
+          description: input.description,
+          start: { dateTime: input.startAt.toISOString(), timeZone: input.timezone },
+          end: { dateTime: input.endAt.toISOString(), timeZone: input.timezone },
+          attendees: input.attendeeEmail
+            ? [{ email: input.attendeeEmail }]
+            : undefined,
+          reminders: {
+            useDefault: false,
+            overrides: [{ method: 'popup', minutes: 60 }],
+          },
+          conferenceData:
+            input.createConference === false
+              ? undefined
+              : {
+                  createRequest: {
+                    requestId: randomUUID(),
+                    conferenceSolutionKey: { type: 'hangoutsMeet' },
+                  },
+                },
+        },
+      });
+      if (!response.data.id) throw new Error('Google Calendar returned no event id');
+      const meetUrl =
+        response.data.hangoutLink ??
+        response.data.conferenceData?.entryPoints?.find(
+          (entry) => entry.entryPointType === 'video',
+        )?.uri ??
+        null;
+      this.logger.logEvent('GoogleCalendarService', 'google.event.created', {
+        google_event_id: response.data.id,
+      });
+      return { googleEventId: response.data.id, googleMeetUrl: meetUrl };
+    } catch (error: unknown) {
+      await this.reportFailure('google.event.create_failed', error);
+      throw error;
+    }
+  }
+
+  async cancelEvent(googleEventId: string): Promise<void> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      await calendar.events.patch({
+        calendarId: this.calendarId,
+        eventId: googleEventId,
+        sendUpdates: 'all',
+        requestBody: { status: 'cancelled' },
+      });
+      this.logger.logEvent('GoogleCalendarService', 'google.event.cancelled', {
+        google_event_id: googleEventId,
+      });
+    } catch (error: unknown) {
+      await this.reportFailure('google.event.cancel_failed', error);
+      throw error;
+    }
+  }
+
+  private createOAuthClient() {
+    if (!this.clientId || !this.clientSecret || !this.redirectUri) {
+      throw new Error('Google OAuth is not configured');
+    }
+    return new google.auth.OAuth2(
+      this.clientId,
+      this.clientSecret,
+      this.redirectUri,
+    );
+  }
+
+  private async authorizedCalendar(): Promise<calendar_v3.Calendar> {
+    const token = await this.prisma.googleOAuthToken.findUnique({
+      where: { id: 1 },
+    });
+    if (!token?.accessToken && !token?.refreshToken) {
+      throw new Error('Google Calendar is not authorized');
+    }
+    const oauth = this.createOAuthClient();
+    oauth.setCredentials({
+      access_token: token.accessToken,
+      refresh_token: token.refreshToken,
+      scope: token.scope ?? undefined,
+      token_type: token.tokenType ?? undefined,
+      expiry_date: token.expiryDate?.getTime(),
+    });
+    oauth.on('tokens', (tokens) => {
+      void this.persistTokens(tokens, token.refreshToken).catch((error: unknown) =>
+        this.logger.errorEvent('GoogleCalendarService', 'google.token.persist_failed', {
+          error_message: errorMessage(error),
+        }),
+      );
+    });
+    return google.calendar({ version: 'v3', auth: oauth as never });
+  }
+
+  private async persistTokens(
+    tokens: TokenCredentials,
+    fallbackRefreshToken: string | null,
+  ): Promise<void> {
+    await this.prisma.googleOAuthToken.upsert({
+      where: { id: 1 },
+      update: {
+        accessToken: tokens.access_token ?? undefined,
+        refreshToken: tokens.refresh_token ?? fallbackRefreshToken ?? undefined,
+        scope: tokens.scope ?? undefined,
+        tokenType: tokens.token_type ?? undefined,
+        expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
+      },
+      create: {
+        id: 1,
+        accessToken: tokens.access_token ?? null,
+        refreshToken: tokens.refresh_token ?? fallbackRefreshToken,
+        scope: tokens.scope ?? null,
+        tokenType: tokens.token_type ?? null,
+        expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      },
+    });
+  }
+
+  private async reportFailure(event: string, error: unknown): Promise<void> {
+    this.logger.errorEvent('GoogleCalendarService', event, {
+      error_message: errorMessage(error),
+    });
+    const token = this.config.get<string | null>('app.telegramBotToken');
+    const adminId = this.config.get<string | null>('app.adminTelegramId');
+    if (!token || !adminId) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: adminId,
+          text: `⚠️ Ошибка Google Calendar\n${event}\n${errorMessage(error)}`,
+        }),
+      });
+    } catch {
+      this.logger.errorEvent('GoogleCalendarService', 'google.admin_notification.failed');
+    }
+  }
+
+  private cleanupExpiredStates(): void {
+    const now = Date.now();
+    for (const [state, expiresAt] of this.oauthStates) {
+      if (expiresAt < now) this.oauthStates.delete(state);
+    }
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

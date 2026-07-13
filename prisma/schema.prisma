@@ -1,0 +1,289 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "cjs"
+  generatedFileExtension = "ts"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  EMAIL
+}
+
+enum BookingType {
+  NEW
+  RESCHEDULE
+  CANCEL
+}
+
+enum MeetingFormat {
+  ONLINE
+  IN_PERSON
+}
+
+enum BookingStatus {
+  PENDING_APPROVAL
+  CONFIRMED
+  REJECTED
+  EXPIRED
+  CANCELLED_BY_USER
+  SLOT_UNAVAILABLE
+  CONFIRMATION_ERROR
+}
+
+enum SlotReservationStatus {
+  ACTIVE
+  RELEASED
+  EXPIRED
+}
+
+enum CalendarSyncStatus {
+  PENDING
+  SYNCED
+  CANCELLED
+  ERROR
+}
+
+enum RestrictionType {
+  FULL_DAY
+  TIME_INTERVAL
+}
+
+enum MessageTemplateType {
+  BOOKING_SUBMITTED
+  BOOKING_CONFIRMED
+  BOOKING_REJECTED
+  BOOKING_EXPIRED
+  BOOKING_CANCELLED
+  RESCHEDULE_SUBMITTED
+  SLOT_UNAVAILABLE
+  CONFIRMATION_ERROR
+}
+
+enum SystemLogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+  FATAL
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id                     String                 @id @default(cuid())
+  telegramId             BigInt                 @unique
+  telegramUsername       String?
+  telegramDisplayName    String
+  lastConfirmedEmail     String?
+  notificationChannel    NotificationChannel    @default(TELEGRAM)
+  status                 UserStatus             @default(ACTIVE)
+  firstInteractionAt     DateTime               @default(now())
+  lastActivityAt         DateTime               @updatedAt
+  bookings               Booking[]
+  blacklistEntry         BlacklistEntry?
+  businessEvents         BusinessEvent[]
+  notificationDeliveries NotificationDelivery[]
+
+  @@index([status])
+}
+
+model Booking {
+  id                     String                 @id @default(cuid())
+  userId                 String
+  type                   BookingType            @default(NEW)
+  meetingFormat          MeetingFormat          @default(ONLINE)
+  durationMinutes        Int
+  startAt                DateTime
+  timezone               String
+  title                  String
+  comment                String?
+  emailSnapshot          String?
+  status                 BookingStatus          @default(PENDING_APPROVAL)
+  rejectionReason        String?
+  expiresAt              DateTime
+  originalBookingId      String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  user                   User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  originalBooking        Booking?               @relation("BookingReschedule", fields: [originalBookingId], references: [id], onDelete: SetNull)
+  rescheduleRequests     Booking[]              @relation("BookingReschedule")
+  slotReservation        SlotReservation?
+  calendarEvent          CalendarEvent?
+  businessEvents         BusinessEvent[]
+  notificationDeliveries NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+  @@index([startAt])
+}
+
+model SlotReservation {
+  id        String                @id @default(cuid())
+  bookingId String                @unique
+  startAt   DateTime
+  endAt     DateTime
+  expiresAt DateTime
+  status    SlotReservationStatus @default(ACTIVE)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  booking   Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@index([startAt, endAt])
+}
+
+model CalendarEvent {
+  id            String             @id @default(cuid())
+  bookingId     String             @unique
+  googleEventId String             @unique
+  googleMeetUrl String?
+  guestEmail    String?
+  syncStatus    CalendarSyncStatus @default(PENDING)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  cancelledAt   DateTime?
+  booking       Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([syncStatus])
+}
+
+model ScheduleSettings {
+  id                     Int                     @id @default(1)
+  minimumLeadTimeMinutes Int                     @default(1440)
+  bufferBeforeMinutes    Int                     @default(0)
+  bufferAfterMinutes     Int                     @default(0)
+  maxMeetingsPerDay      Int                     @default(4)
+  bookingHorizonDays     Int                     @default(30)
+  timezone               String                  @default("Europe/Moscow")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  workingPeriods         ScheduleWorkingPeriod[]
+}
+
+model ScheduleWorkingPeriod {
+  id                 String           @id @default(cuid())
+  scheduleSettingsId Int
+  weekday            Int
+  startMinute        Int
+  endMinute          Int
+  enabled            Boolean          @default(true)
+  scheduleSettings   ScheduleSettings @relation(fields: [scheduleSettingsId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleSettingsId, weekday, startMinute, endMinute])
+  @@index([weekday, enabled])
+}
+
+model AvailabilityRestriction {
+  id          String          @id @default(cuid())
+  date        DateTime
+  type        RestrictionType
+  startMinute Int?
+  endMinute   Int?
+  comment     String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([date, type])
+}
+
+model BlacklistEntry {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  reason              String?
+  active              Boolean   @default(true)
+  createdByTelegramId BigInt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  removedAt           DateTime?
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([active])
+}
+
+model MessageTemplate {
+  id        String              @id @default(cuid())
+  type      MessageTemplateType @unique
+  text      String
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+}
+
+model SystemLog {
+  id                String         @id @default(cuid())
+  eventType         String
+  level             SystemLogLevel
+  relatedEntityType String?
+  relatedEntityId   String?
+  message           String
+  technicalDetails  String?
+  createdAt         DateTime       @default(now())
+
+  @@index([level, createdAt])
+  @@index([relatedEntityType, relatedEntityId])
+}
+
+model BusinessEvent {
+  id        String   @id @default(cuid())
+  eventType String
+  userId    String?
+  bookingId String?
+  payload   String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model GoogleOAuthToken {
+  id           Int       @id @default(1)
+  accessToken  String?
+  refreshToken String?
+  scope        String?
+  tokenType    String?
+  expiryDate   DateTime?
+  accountEmail String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model NotificationDelivery {
+  id            String                     @id @default(cuid())
+  userId        String
+  bookingId     String?
+  channel       NotificationChannel
+  eventType     String
+  recipient     String
+  subject       String
+  text          String
+  status        NotificationDeliveryStatus @default(PENDING)
+  attempts      Int                        @default(0)
+  nextAttemptAt DateTime                   @default(now())
+  lastError     String?
+  sentAt        DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking       Booking?                   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@index([bookingId])
+}

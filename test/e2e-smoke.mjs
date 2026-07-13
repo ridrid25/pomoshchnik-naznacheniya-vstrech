@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import net from 'node:net';
+import { resolve } from 'node:path';
 import test from 'node:test';
 
 test('Stage 1 runtime smoke', { timeout: 20_000 }, async () => {
   const port = await getFreePort();
+  const databasePath = resolve(
+    process.cwd(),
+    'data',
+    `stage1-e2e-${process.pid}-${Date.now()}.db`,
+  );
+  const databaseUrl = `file:${databasePath.replaceAll('\\', '/')}`;
   const stdout = [];
   const stderr = [];
   const child = spawn(process.execPath, ['--enable-source-maps', 'dist/main.js'], {
@@ -14,7 +22,15 @@ test('Stage 1 runtime smoke', { timeout: 20_000 }, async () => {
       NODE_ENV: 'test',
       PORT: String(port),
       LOG_LEVEL: 'log',
+      DATABASE_URL: databaseUrl,
+      TELEGRAM_BOT_TOKEN: '',
+      TELEGRAM_DEV_POLLING: 'false',
+      TELEGRAM_API_ROOT: '',
+      ADMIN_TELEGRAM_ID: '',
       TELEGRAM_WEBHOOK_SECRET: 'stage1-test-secret',
+      GOOGLE_OAUTH_CLIENT_ID: '',
+      GOOGLE_OAUTH_CLIENT_SECRET: '',
+      GOOGLE_OAUTH_REDIRECT_URI: '',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -34,6 +50,21 @@ test('Stage 1 runtime smoke', { timeout: 20_000 }, async () => {
     assert.equal(health.service, 'pomoshchnik-naznacheniya-vstrech');
     assert.equal(health.environment, 'test');
     assert.equal(typeof health.timestamp, 'string');
+
+    const googleStatusResponse = await fetch(
+      `http://127.0.0.1:${port}/google/oauth/status`,
+    );
+    assert.equal(googleStatusResponse.status, 200);
+    assert.deepEqual(await googleStatusResponse.json(), {
+      configured: false,
+      authorized: false,
+      tokenExpiresAt: null,
+    });
+    const googleStartResponse = await fetch(
+      `http://127.0.0.1:${port}/google/oauth/start`,
+      { redirect: 'manual' },
+    );
+    assert.equal(googleStartResponse.status, 400);
 
     const unauthorizedResponse = await fetch(
       `http://127.0.0.1:${port}/telegram/webhook`,
@@ -69,6 +100,10 @@ test('Stage 1 runtime smoke', { timeout: 20_000 }, async () => {
     ];
     assert.ok(entries.some((entry) => entry.event === 'application.started'));
     assert.ok(
+      entries.some((entry) => entry.event === 'database.migrations.ready'),
+    );
+    assert.ok(entries.some((entry) => entry.event === 'database.seed.ready'));
+    assert.ok(
       entries.some(
         (entry) =>
           entry.event === 'telegram.webhook.received' && entry.update_id === 1002,
@@ -81,6 +116,9 @@ test('Stage 1 runtime smoke', { timeout: 20_000 }, async () => {
       new Promise((resolve) => child.once('exit', resolve)),
       new Promise((resolve) => setTimeout(resolve, 2_000)),
     ]);
+    for (const suffix of ['', '-journal', '-shm', '-wal']) {
+      rmSync(`${databasePath}${suffix}`, { force: true });
+    }
   }
 });
 
@@ -93,6 +131,9 @@ test('Invalid environment fails with a structured startup error', async () => {
       NODE_ENV: 'test',
       PORT: '70000',
       LOG_LEVEL: 'log',
+      TELEGRAM_BOT_TOKEN: '',
+      TELEGRAM_DEV_POLLING: 'false',
+      TELEGRAM_API_ROOT: '',
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });

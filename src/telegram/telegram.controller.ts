@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import { JsonLoggerService } from '../logging/json-logger.service';
+import { BotFlowService } from './bot-flow.service';
 
 interface TelegramUpdateShape {
   update_id?: unknown;
@@ -20,14 +21,15 @@ export class TelegramController {
   constructor(
     private readonly config: ConfigService,
     private readonly logger: JsonLoggerService,
+    private readonly botFlow: BotFlowService,
   ) {}
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  handleWebhook(
+  async handleWebhook(
     @Body() update: unknown,
     @Headers('x-telegram-bot-api-secret-token') receivedSecret?: string,
-  ): { ok: true } {
+  ): Promise<{ ok: true }> {
     const configuredSecret = this.config.get<string | null>(
       'app.telegramWebhookSecret',
     );
@@ -39,6 +41,8 @@ export class TelegramController {
     this.logger.logEvent('TelegramController', 'telegram.webhook.received', {
       update_id: getUpdateId(update),
     });
+
+    await this.botFlow.handleUpdate(update);
 
     return { ok: true };
   }

@@ -14,6 +14,32 @@ export function validateEnvironment(
   const nodeEnv = String(config.NODE_ENV ?? 'development').trim();
   const logLevel = String(config.LOG_LEVEL ?? 'log').trim();
   const port = Number(config.PORT ?? 3000);
+  const databaseUrl = String(
+    config.DATABASE_URL ?? 'file:./data/app.db',
+  ).trim();
+  const telegramDevPolling = parseBoolean(
+    config.TELEGRAM_DEV_POLLING ?? false,
+    'TELEGRAM_DEV_POLLING',
+  );
+  const telegramBotToken = String(config.TELEGRAM_BOT_TOKEN ?? '').trim();
+  const adminTelegramId = String(config.ADMIN_TELEGRAM_ID ?? '').trim();
+  const telegramApiRoot = String(config.TELEGRAM_API_ROOT ?? '').trim();
+  const telegramWebhookSecret = String(
+    config.TELEGRAM_WEBHOOK_SECRET ?? '',
+  ).trim();
+  const googleClientId = String(config.GOOGLE_OAUTH_CLIENT_ID ?? '').trim();
+  const googleClientSecret = String(
+    config.GOOGLE_OAUTH_CLIENT_SECRET ?? '',
+  ).trim();
+  const googleRedirectUri = String(
+    config.GOOGLE_OAUTH_REDIRECT_URI ?? '',
+  ).trim();
+  const smtpHost = String(config.SMTP_HOST ?? '').trim();
+  const smtpPort = Number(config.SMTP_PORT ?? 587);
+  const smtpSecure = parseBoolean(config.SMTP_SECURE ?? false, 'SMTP_SECURE');
+  const smtpUser = String(config.SMTP_USER ?? '').trim();
+  const smtpPassword = String(config.SMTP_PASSWORD ?? '');
+  const smtpFrom = String(config.SMTP_FROM ?? '').trim();
 
   if (!NODE_ENV_VALUES.has(nodeEnv)) {
     throw new Error(
@@ -31,9 +57,88 @@ export function validateEnvironment(
     throw new Error('PORT must be an integer between 1 and 65535');
   }
 
+  if (!databaseUrl.startsWith('file:')) {
+    throw new Error('DATABASE_URL must use the file: protocol for SQLite');
+  }
+
+  if (telegramDevPolling && !telegramBotToken) {
+    throw new Error(
+      'TELEGRAM_BOT_TOKEN is required when TELEGRAM_DEV_POLLING=true',
+    );
+  }
+
+  if (adminTelegramId && !/^\d+$/u.test(adminTelegramId)) {
+    throw new Error('ADMIN_TELEGRAM_ID must contain digits only');
+  }
+
+  if (telegramApiRoot && nodeEnv !== 'test') {
+    throw new Error('TELEGRAM_API_ROOT may only be set in NODE_ENV=test');
+  }
+
+  if (
+    nodeEnv === 'production' &&
+    telegramBotToken &&
+    !telegramDevPolling &&
+    !telegramWebhookSecret
+  ) {
+    throw new Error(
+      'TELEGRAM_WEBHOOK_SECRET is required for Telegram webhook in production',
+    );
+  }
+
+  const googleValues = [googleClientId, googleClientSecret, googleRedirectUri];
+  if (googleValues.some(Boolean) && !googleValues.every(Boolean)) {
+    throw new Error(
+      'GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET and GOOGLE_OAUTH_REDIRECT_URI must be configured together',
+    );
+  }
+
+  if (googleRedirectUri) {
+    const redirect = new URL(googleRedirectUri);
+    if (
+      nodeEnv === 'production' &&
+      redirect.protocol !== 'https:'
+    ) {
+      throw new Error('GOOGLE_OAUTH_REDIRECT_URI must use HTTPS in production');
+    }
+  }
+
+  const smtpValues = [smtpHost, smtpUser, smtpPassword, smtpFrom];
+  if (smtpValues.some(Boolean) && !smtpValues.every(Boolean)) {
+    throw new Error(
+      'SMTP_HOST, SMTP_USER, SMTP_PASSWORD and SMTP_FROM must be configured together',
+    );
+  }
+  if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65_535) {
+    throw new Error('SMTP_PORT must be an integer between 1 and 65535');
+  }
+
   config.NODE_ENV = nodeEnv;
   config.LOG_LEVEL = logLevel;
   config.PORT = port;
+  config.DATABASE_URL = databaseUrl;
+  config.TELEGRAM_DEV_POLLING = telegramDevPolling;
+  config.TELEGRAM_BOT_TOKEN = telegramBotToken;
+  config.ADMIN_TELEGRAM_ID = adminTelegramId;
+  config.TELEGRAM_API_ROOT = telegramApiRoot;
+  config.TELEGRAM_WEBHOOK_SECRET = telegramWebhookSecret;
+  config.GOOGLE_OAUTH_CLIENT_ID = googleClientId;
+  config.GOOGLE_OAUTH_CLIENT_SECRET = googleClientSecret;
+  config.GOOGLE_OAUTH_REDIRECT_URI = googleRedirectUri;
+  config.SMTP_HOST = smtpHost;
+  config.SMTP_PORT = smtpPort;
+  config.SMTP_SECURE = smtpSecure;
+  config.SMTP_USER = smtpUser;
+  config.SMTP_PASSWORD = smtpPassword;
+  config.SMTP_FROM = smtpFrom;
 
   return config;
+}
+
+function parseBoolean(value: unknown, name: string): boolean {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false' || normalized === '') return false;
+  throw new Error(`${name} must be true or false`);
 }

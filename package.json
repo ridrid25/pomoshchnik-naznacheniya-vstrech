@@ -5,28 +5,55 @@
   "description": "Telegram-бот для согласования встреч в Google Calendar",
   "license": "UNLICENSED",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "postinstall": "prisma generate",
     "start": "node --enable-source-maps dist/main.js",
     "start:dev": "tsx watch src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run test:e2e",
-    "test:e2e": "npm run build && node --test test/e2e-smoke.mjs"
+    "test": "npm run test:e2e && npm run db:smoke && npm run availability:smoke && npm run google:smoke && npm run booking:smoke",
+    "test:e2e": "npm run build && node --test test/e2e-smoke.mjs test/stage3-bot-flow.mjs",
+    "prisma:format": "prisma format",
+    "prisma:generate": "prisma generate",
+    "preprisma:migrate:dev": "node scripts/ensure-data-directory.mjs",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "preprisma:migrate:deploy": "node scripts/ensure-data-directory.mjs",
+    "prisma:migrate:deploy": "tsx scripts/migrate-sqlite.ts",
+    "db:seed": "tsx scripts/migrate-sqlite.ts && tsx prisma/seed.ts",
+    "db:smoke": "node scripts/verify-stage2.mjs",
+    "availability:smoke": "node scripts/verify-stage4.mjs",
+    "google:smoke": "node scripts/verify-stage5.mjs",
+    "google:live": "tsx scripts/verify-google-live.ts",
+    "booking:smoke": "node scripts/verify-stage6.mjs",
+    "db:backup": "tsx scripts/backup-sqlite.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.1.28",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.28",
     "@nestjs/platform-express": "11.1.28",
+    "@prisma/adapter-better-sqlite3": "7.8.0",
+    "@prisma/client": "7.8.0",
+    "@types/nodemailer": "7.0.11",
+    "better-sqlite3": "12.11.1",
+    "dotenv": "^17.2.3",
+    "googleapis": "^173.0.0",
+    "grammy": "^1.44.0",
+    "nodemailer": "9.0.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
+    "prisma": "7.8.0",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3"
   },
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "@hono/node-server": "1.19.13"
   }
 }

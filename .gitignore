@@ -13,6 +13,10 @@ logs/
 *.sqlite3
 *.db
 data/
+backups/
+client_secret*.json
+credentials*.json
+src/generated/prisma/
 
 .DS_Store
 Thumbs.db
