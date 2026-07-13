@@ -77,7 +77,6 @@ requireMarkers('docs', [
   'VPS_SSH_PRIVATE_KEY',
   'VPS_KNOWN_HOSTS',
   'PUBLIC_HEALTH_URL',
-  'Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ РѕС‚РєР°С‚',
   '.env.production',
 ]);
 
