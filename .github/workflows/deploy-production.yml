@@ -31,6 +31,9 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
+      - name: Prepare non-secret Compose test environment
+        run: cp .env.production.example .env.production
+
       - name: Run project checks
         run: npm test
 
@@ -146,4 +149,5 @@ jobs:
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Health: ${PUBLIC_HEALTH_URL}"
           } >> "$GITHUB_STEP_SUMMARY"
+
 
