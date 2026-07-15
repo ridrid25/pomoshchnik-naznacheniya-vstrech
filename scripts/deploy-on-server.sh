@@ -140,7 +140,7 @@ start_and_wait() {
     if [ "$status" = healthy ] && curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3020/health >/dev/null; then
       mini_app_html=$(curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3020/mini-app) || return 1
       mini_app_js=$(curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3020/mini-app/app.js) || return 1
-      printf '%s' "$mini_app_html" | grep -Fq 'Запись на встречу' || return 1
+      printf '%s' "$mini_app_html" | grep -Fq 'id="app"' || return 1
       printf '%s' "$mini_app_js" | grep -Fq 'idempotencyKey' || return 1
       return 0
     fi

@@ -37,7 +37,7 @@ esac
 mini_app_url="${base_url}/mini-app"
 html=$(curl --fail --silent --show-error --max-time 15 "$mini_app_url")
 javascript=$(curl --fail --silent --show-error --max-time 15 "${mini_app_url}/app.js")
-printf '%s' "$html" | grep -Fq 'Запись на встречу'
+printf '%s' "$html" | grep -Fq 'id="app"'
 printf '%s' "$javascript" | grep -Fq 'idempotencyKey'
 
 me_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 \
