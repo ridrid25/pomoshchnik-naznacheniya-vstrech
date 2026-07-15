@@ -36,9 +36,11 @@ export function validateEnvironment(
   ).trim();
   const publicBaseUrl = String(config.PUBLIC_BASE_URL ?? '').trim();
   const adminActionSecret = String(config.ADMIN_ACTION_SECRET ?? '').trim();
-  const miniAppSessionSecret = String(
+  const configuredMiniAppSessionSecret = String(
     config.MINI_APP_SESSION_SECRET ?? '',
   ).trim();
+  const miniAppSessionSecret =
+    configuredMiniAppSessionSecret || adminActionSecret;
   const miniAppSessionTtlSeconds = Number(
     config.MINI_APP_SESSION_TTL_SECONDS ?? 7200,
   );
@@ -131,12 +133,15 @@ export function validateEnvironment(
   if (adminActionSecret && adminActionSecret.length < 32) {
     throw new Error('ADMIN_ACTION_SECRET must contain at least 32 characters');
   }
-  if (miniAppSessionSecret && miniAppSessionSecret.length < 32) {
+  if (
+    configuredMiniAppSessionSecret &&
+    configuredMiniAppSessionSecret.length < 32
+  ) {
     throw new Error('MINI_APP_SESSION_SECRET must contain at least 32 characters');
   }
   if (nodeEnv === 'production' && publicBaseUrl && !miniAppSessionSecret) {
     throw new Error(
-      'MINI_APP_SESSION_SECRET is required with PUBLIC_BASE_URL in production',
+      'MINI_APP_SESSION_SECRET or ADMIN_ACTION_SECRET is required with PUBLIC_BASE_URL in production',
     );
   }
   if (

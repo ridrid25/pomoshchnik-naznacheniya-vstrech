@@ -13,7 +13,9 @@ export default registerAs('app', () => ({
   publicBaseUrl: process.env.PUBLIC_BASE_URL?.trim().replace(/\/$/u, '') || null,
   adminActionSecret: process.env.ADMIN_ACTION_SECRET?.trim() || null,
   miniAppSessionSecret:
-    process.env.MINI_APP_SESSION_SECRET?.trim() || null,
+    process.env.MINI_APP_SESSION_SECRET?.trim() ||
+    process.env.ADMIN_ACTION_SECRET?.trim() ||
+    null,
   miniAppSessionTtlSeconds: Number(
     process.env.MINI_APP_SESSION_TTL_SECONDS ?? 7200,
   ),

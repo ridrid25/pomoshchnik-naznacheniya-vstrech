@@ -13,6 +13,9 @@ read_env() {
 base_url=$(read_env PUBLIC_BASE_URL)
 bot_token=$(read_env TELEGRAM_BOT_TOKEN)
 session_secret=$(read_env MINI_APP_SESSION_SECRET)
+if [ "${#session_secret}" -lt 32 ]; then
+  session_secret=$(read_env ADMIN_ACTION_SECRET)
+fi
 
 case "$base_url" in
   https://*) ;;
@@ -27,7 +30,7 @@ esac
   exit 1
 }
 [ "${#session_secret}" -ge 32 ] || {
-  printf 'MINI_APP_ERROR=MINI_APP_SESSION_SECRET is missing or too short\n' >&2
+  printf 'MINI_APP_ERROR=MINI_APP_SESSION_SECRET and ADMIN_ACTION_SECRET are missing or too short\n' >&2
   exit 1
 }
 

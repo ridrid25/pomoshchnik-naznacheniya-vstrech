@@ -152,6 +152,8 @@ start_and_wait() {
 }
 
 if ! start_and_wait; then
+  docker compose --env-file .env.production ps app >&2 || true
+  docker compose --env-file .env.production logs --no-color --tail=80 app >&2 || true
   fail "New release failed health checks; automatic rollback was started"
 fi
 

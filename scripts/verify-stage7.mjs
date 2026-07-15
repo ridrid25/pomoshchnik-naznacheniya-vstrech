@@ -105,6 +105,7 @@ for (const marker of [
   '${mini_app_url}/app.js',
   '/api/mini-app/v1/me',
   'getChatMenuButton',
+  'ADMIN_ACTION_SECRET',
   'MINI_APP_STATUS=ready',
 ]) {
   assert.ok(
