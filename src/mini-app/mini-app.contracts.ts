@@ -97,3 +97,30 @@ export interface MiniAppAdminQueueSummaryContract {
   pending: number;
   decidedToday: number;
 }
+
+export interface MiniAppAdminSettingsContract {
+  google: {
+    configured: boolean;
+    authorized: boolean;
+    accountEmail: string | null;
+    tokenExpiresAt: string | null;
+  };
+  schedule: {
+    timezone: string;
+    minimumLeadTimeMinutes: number;
+    bufferBeforeMinutes: number;
+    bufferAfterMinutes: number;
+    maxMeetingsPerDay: number;
+    bookingHorizonDays: number;
+    workingPeriods: Array<{
+      weekday: number;
+      startMinute: number;
+      endMinute: number;
+    }>;
+  };
+  overview: {
+    activeRestrictions: number;
+    blockedUsers: number;
+    templates: number;
+  };
+}

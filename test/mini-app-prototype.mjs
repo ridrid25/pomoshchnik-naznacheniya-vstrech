@@ -12,7 +12,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   const css = readFileSync(resolve(prototypeRoot, 'styles.css'), 'utf8');
   const javascript = readFileSync(resolve(prototypeRoot, 'app.js'), 'utf8');
 
-  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail']) {
+  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings']) {
     assert.match(html, new RegExp(`data-screen="${screen}"`, 'u'));
   }
   assert.match(html, /Запись на встречу/u);
@@ -45,7 +45,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /googleCalendarDayUrl/u);
   assert.match(javascript, /dataset\.calendarUrl/u);
   assert.match(javascript, /tg\?\.openLink/u);
+  assert.match(javascript, /admin\/settings\/schedule/u);
+  assert.match(javascript, /saveAdminSchedule/u);
   assert.match(css, /calendar-review-card/u);
+  assert.match(css, /integration-status-card/u);
+  assert.match(html, /Календарь и расписание/u);
+  assert.doesNotMatch(javascript, /серые заявки/iu);
 });
 
 test('M2 prototype server returns all local assets', { timeout: 10_000 }, async () => {

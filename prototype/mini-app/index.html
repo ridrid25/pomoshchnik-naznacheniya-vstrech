@@ -286,6 +286,11 @@
           <i></i>
           <div><span>Ожидают</span><strong id="adminPendingCount">0</strong></div>
         </div>
+        <button class="admin-settings-entry" type="button" data-nav="admin-settings">
+          <span class="metric-icon purple"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.52-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.05V3h4v.08a1.7 1.7 0 0 0 1.03 1.52 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.52 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z" /></svg></span>
+          <span><strong>Календарь и расписание</strong><small>Состояние интеграции и правила записи</small></span>
+          <span aria-hidden="true">›</span>
+        </button>
         <div class="tab-control" role="tablist" aria-label="Фильтр очереди">
           <button class="is-selected" type="button" role="tab" aria-selected="true" data-admin-tab="pending">Ожидают</button>
           <button type="button" role="tab" aria-selected="false" data-admin-tab="recent">Недавние</button>
@@ -301,6 +306,41 @@
         </div>
         <article class="booking-detail-card" id="adminDetailCard"></article>
         <div class="detail-actions" id="adminDetailActions"></div>
+      </section>
+
+      <section class="screen" data-screen="admin-settings" aria-labelledby="adminSettingsTitle">
+        <div class="page-heading">
+          <div><p class="eyebrow">Центр управления</p><h1 id="adminSettingsTitle">Настройки</h1></div>
+          <span class="format-chip online">Администратор</span>
+        </div>
+        <p class="availability-state" id="adminSettingsState" role="status">Загружаем настройки…</p>
+        <div id="adminSettingsContent" class="admin-settings-content is-hidden">
+          <article class="integration-status-card" id="googleIntegrationCard"></article>
+          <form class="schedule-settings-card" id="scheduleSettingsForm">
+            <div class="settings-section-head">
+              <div><p class="eyebrow">Правила записи</p><h2>Основное расписание</h2></div>
+              <span class="timezone-pill" id="scheduleTimezone">Москва</span>
+            </div>
+            <div class="working-periods" id="workingPeriods"></div>
+            <div class="settings-fields">
+              <label><span>Запись не позднее чем за</span><select id="minimumLeadTimeMinutes"><option value="60">1 час</option><option value="180">3 часа</option><option value="720">12 часов</option><option value="1440">24 часа</option><option value="2880">48 часов</option></select></label>
+              <label><span>Показывать даты вперёд</span><select id="bookingHorizonDays"><option value="7">7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option><option value="60">60 дней</option><option value="90">90 дней</option></select></label>
+              <label><span>Встреч в день</span><select id="maxMeetingsPerDay"><option value="2">До 2</option><option value="3">До 3</option><option value="4">До 4</option><option value="5">До 5</option><option value="6">До 6</option><option value="8">До 8</option></select></label>
+              <label><span>Буфер до встречи</span><select id="bufferBeforeMinutes"><option value="0">Без буфера</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">60 минут</option></select></label>
+              <label><span>Буфер после встречи</span><select id="bufferAfterMinutes"><option value="0">Без буфера</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">60 минут</option></select></label>
+            </div>
+            <button class="primary-button full-width" id="saveScheduleSettings" type="submit">Сохранить правила</button>
+          </form>
+          <section class="admin-tools-overview" aria-labelledby="adminToolsTitle">
+            <div class="settings-section-head"><div><p class="eyebrow">Следующие разделы</p><h2 id="adminToolsTitle">Контроль записей</h2></div></div>
+            <div class="admin-tool-metrics">
+              <div><span class="metric-icon warm">◷</span><strong id="restrictionCount">0</strong><small>Ограничения</small></div>
+              <div><span class="metric-icon coral">!</span><strong id="blockedUserCount">0</strong><small>Заблокированы</small></div>
+              <div><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></div>
+            </div>
+            <p>Управление отдельными датами, пользователями и текстами добавим следующими блоками этого этапа.</p>
+          </section>
+        </div>
       </section>
 
       <nav class="bottom-nav" aria-label="Основная навигация">

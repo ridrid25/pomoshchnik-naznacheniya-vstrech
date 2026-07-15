@@ -25,6 +25,13 @@
     adminQueue: $('adminQueue'), adminQueueState: $('adminQueueState'), adminQueueCount: $('adminQueueCount'),
     adminPendingCount: $('adminPendingCount'), adminDecidedToday: $('adminDecidedToday'), adminNavCount: $('adminNavCount'),
     adminDetailCard: $('adminDetailCard'), adminDetailActions: $('adminDetailActions'),
+    adminSettingsState: $('adminSettingsState'), adminSettingsContent: $('adminSettingsContent'),
+    googleIntegrationCard: $('googleIntegrationCard'), scheduleSettingsForm: $('scheduleSettingsForm'),
+    scheduleTimezone: $('scheduleTimezone'), workingPeriods: $('workingPeriods'),
+    minimumLeadTimeMinutes: $('minimumLeadTimeMinutes'), bookingHorizonDays: $('bookingHorizonDays'),
+    maxMeetingsPerDay: $('maxMeetingsPerDay'), bufferBeforeMinutes: $('bufferBeforeMinutes'),
+    bufferAfterMinutes: $('bufferAfterMinutes'), saveScheduleSettings: $('saveScheduleSettings'),
+    restrictionCount: $('restrictionCount'), blockedUserCount: $('blockedUserCount'), templateCount: $('templateCount'),
   };
 
   const state = {
@@ -37,7 +44,7 @@
     selectedBooking: null, rescheduleOriginal: null, pendingCancelId: null,
     notificationChannel: 'TELEGRAM', demoBookings: [],
     adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0 },
-    selectedAdminBooking: null, pendingAdminAction: null,
+    selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
   };
 
   const stepCopy = {
@@ -158,7 +165,7 @@
       screen.classList.toggle('is-active', active);
       screen.setAttribute('aria-hidden', String(!active));
     });
-    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail';
+    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings';
     elements.bottomNav.classList.toggle('is-hidden', flow);
     elements.back.classList.toggle('is-hidden', !flow);
     if (tg) flow ? tg.BackButton.show() : tg.BackButton.hide();
@@ -172,6 +179,7 @@
     });
     if (name === 'bookings') void loadBookings();
     if (name === 'admin') void loadAdminQueue();
+    if (name === 'admin-settings') void loadAdminSettings();
     scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -611,6 +619,104 @@
     }
   }
 
+  async function loadAdminSettings() {
+    if (state.user?.role !== 'ADMIN') return;
+    elements.adminSettingsState.textContent = 'Загружаем настройки…';
+    elements.adminSettingsState.classList.remove('is-hidden');
+    elements.adminSettingsContent.classList.add('is-hidden');
+    try {
+      state.adminSettings = state.mode === 'demo'
+        ? demoAdminSettings()
+        : await api('/admin/settings');
+      renderAdminSettings();
+    } catch (error) {
+      elements.adminSettingsState.textContent = error.message || 'Не удалось загрузить настройки';
+    }
+  }
+
+  function renderAdminSettings() {
+    const settings = state.adminSettings;
+    if (!settings) return;
+    const google = settings.google;
+    const connected = google.configured && google.authorized;
+    elements.googleIntegrationCard.className = `integration-status-card ${connected ? 'is-connected' : 'needs-attention'}`;
+    elements.googleIntegrationCard.innerHTML = `
+      <div class="integration-status-head"><span class="integration-logo"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span><div><p class="eyebrow">Google Calendar</p><h2>${connected ? 'Календарь подключён' : 'Нужно подключение'}</h2></div><span class="integration-dot" aria-hidden="true"></span></div>
+      <p>${connected ? 'Свободные окна, заявки и подтверждённые встречи синхронизируются автоматически.' : 'Проверьте OAuth-настройки в Telegram-разделе администратора.'}</p>
+      <div class="integration-account"><span>Аккаунт</span><strong>${escapeHtml(google.accountEmail || 'Не определён')}</strong></div>`;
+    const schedule = settings.schedule;
+    elements.scheduleTimezone.textContent = timezoneLabel(schedule.timezone);
+    elements.workingPeriods.innerHTML = renderWorkingPeriods(schedule.workingPeriods);
+    setSelectValue(elements.minimumLeadTimeMinutes, schedule.minimumLeadTimeMinutes, `${schedule.minimumLeadTimeMinutes} мин`);
+    setSelectValue(elements.bookingHorizonDays, schedule.bookingHorizonDays, `${schedule.bookingHorizonDays} дней`);
+    setSelectValue(elements.maxMeetingsPerDay, schedule.maxMeetingsPerDay, `До ${schedule.maxMeetingsPerDay}`);
+    setSelectValue(elements.bufferBeforeMinutes, schedule.bufferBeforeMinutes, `${schedule.bufferBeforeMinutes} минут`);
+    setSelectValue(elements.bufferAfterMinutes, schedule.bufferAfterMinutes, `${schedule.bufferAfterMinutes} минут`);
+    elements.restrictionCount.textContent = settings.overview.activeRestrictions;
+    elements.blockedUserCount.textContent = settings.overview.blockedUsers;
+    elements.templateCount.textContent = settings.overview.templates;
+    elements.adminSettingsState.classList.add('is-hidden');
+    elements.adminSettingsContent.classList.remove('is-hidden');
+  }
+
+  function renderWorkingPeriods(periods) {
+    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const grouped = new Map();
+    periods.forEach((period) => {
+      if (!grouped.has(period.weekday)) grouped.set(period.weekday, []);
+      grouped.get(period.weekday).push(`${minuteTime(period.startMinute)}–${minuteTime(period.endMinute)}`);
+    });
+    return [...grouped.entries()].map(([weekday, ranges]) => `<span><strong>${dayNames[weekday] || weekday}</strong><small>${escapeHtml(ranges.join(', '))}</small></span>`).join('');
+  }
+
+  function minuteTime(minutes) {
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  }
+
+  function setSelectValue(select, value, label) {
+    if (![...select.options].some((option) => Number(option.value) === Number(value))) {
+      select.add(new Option(label, String(value)));
+    }
+    select.value = String(value);
+  }
+
+  function demoAdminSettings() {
+    return {
+      google: { configured: true, authorized: true, accountEmail: 'calendar@example.com', tokenExpiresAt: null },
+      schedule: {
+        timezone: 'Europe/Moscow', minimumLeadTimeMinutes: 1440,
+        bufferBeforeMinutes: 0, bufferAfterMinutes: 0, maxMeetingsPerDay: 4, bookingHorizonDays: 30,
+        workingPeriods: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, startMinute: 540, endMinute: 1080 })),
+      },
+      overview: { activeRestrictions: 1, blockedUsers: 0, templates: 8 },
+    };
+  }
+
+  async function saveAdminSchedule(event) {
+    event.preventDefault();
+    const payload = {
+      minimumLeadTimeMinutes: Number(elements.minimumLeadTimeMinutes.value),
+      bookingHorizonDays: Number(elements.bookingHorizonDays.value),
+      maxMeetingsPerDay: Number(elements.maxMeetingsPerDay.value),
+      bufferBeforeMinutes: Number(elements.bufferBeforeMinutes.value),
+      bufferAfterMinutes: Number(elements.bufferAfterMinutes.value),
+    };
+    elements.saveScheduleSettings.disabled = true;
+    elements.saveScheduleSettings.textContent = 'Сохраняем…';
+    try {
+      if (state.mode === 'demo') Object.assign(state.adminSettings.schedule, payload);
+      else state.adminSettings = await api('/admin/settings/schedule', { method: 'PATCH', body: JSON.stringify(payload) });
+      renderAdminSettings();
+      showToast('Правила записи сохранены');
+      tg?.HapticFeedback?.notificationOccurred('success');
+    } catch (error) {
+      showToast(error.message || 'Не удалось сохранить правила');
+    } finally {
+      elements.saveScheduleSettings.disabled = false;
+      elements.saveScheduleSettings.textContent = 'Сохранить правила';
+    }
+  }
+
   async function loadAdminQueue() {
     if (state.user?.role !== 'ADMIN') return;
     elements.adminQueueState.textContent = 'Загружаем очередь…';
@@ -700,7 +806,7 @@
       ${booking.googleCalendarDayUrl ? `<section class="calendar-review-card">
         <div class="calendar-review-head">
           <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
-          <div><small>GOOGLE CALENDAR</small><strong>Проверьте серые заявки</strong></div>
+          <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
         </div>
         <p>Откроем нужный день календаря. Сравните эту встречу с другими заявками на согласовании.</p>
         <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(booking.googleCalendarDayUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
@@ -1023,6 +1129,7 @@
   });
 
   elements.theme.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
+  elements.scheduleSettingsForm.addEventListener('submit', saveAdminSchedule);
   elements.back.addEventListener('click', goBack);
   elements.previous.addEventListener('click', () => setWizardStep(state.step - 1));
   elements.next.addEventListener('click', async () => {

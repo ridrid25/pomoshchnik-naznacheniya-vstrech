@@ -119,6 +119,68 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(meResponse.status, 200);
     assert.equal((await meResponse.json()).user.role, 'ADMIN');
 
+    const adminSettings = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings`,
+      { headers: { cookie } },
+    );
+    assert.equal(adminSettings.status, 200);
+    const adminSettingsBody = await adminSettings.json();
+    assert.equal(adminSettingsBody.google.authorized, false);
+    assert.equal(adminSettingsBody.schedule.timezone, 'Europe/Moscow');
+    assert.equal(adminSettingsBody.schedule.workingPeriods.length, 5);
+    assert.equal(adminSettingsBody.overview.templates, 8);
+
+    const updatedAdminSettings = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings/schedule`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          minimumLeadTimeMinutes: 180,
+          bookingHorizonDays: 14,
+          maxMeetingsPerDay: 5,
+          bufferBeforeMinutes: 15,
+          bufferAfterMinutes: 30,
+        }),
+      },
+    );
+    assert.equal(updatedAdminSettings.status, 200, await updatedAdminSettings.clone().text());
+    const updatedAdminSettingsBody = await updatedAdminSettings.json();
+    assert.equal(updatedAdminSettingsBody.schedule.minimumLeadTimeMinutes, 180);
+    assert.equal(updatedAdminSettingsBody.schedule.bufferAfterMinutes, 30);
+
+    const invalidAdminSettings = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings/schedule`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          minimumLeadTimeMinutes: -1,
+          bookingHorizonDays: 14,
+          maxMeetingsPerDay: 5,
+          bufferBeforeMinutes: 15,
+          bufferAfterMinutes: 30,
+        }),
+      },
+    );
+    assert.equal(invalidAdminSettings.status, 400);
+
+    const restoredAdminSettings = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings/schedule`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          minimumLeadTimeMinutes: 1440,
+          bookingHorizonDays: 30,
+          maxMeetingsPerDay: 4,
+          bufferBeforeMinutes: 0,
+          bufferAfterMinutes: 0,
+        }),
+      },
+    );
+    assert.equal(restoredAdminSettings.status, 200);
+
     const weeksResponse = await fetch(
       `${origin}/api/mini-app/v1/availability/weeks?duration=30`,
       { headers: { cookie } },
@@ -152,6 +214,11 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       { headers: { cookie: regularCookie } },
     );
     assert.equal(forbiddenAdminQueue.status, 403);
+    const forbiddenAdminSettings = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings`,
+      { headers: { cookie: regularCookie } },
+    );
+    assert.equal(forbiddenAdminSettings.status, 403);
 
     const weeks = await fetch(
       `${origin}/api/mini-app/v1/availability/weeks?duration=30`,
