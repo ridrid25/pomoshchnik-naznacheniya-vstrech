@@ -1070,6 +1070,10 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .calendar-review-button { position: relative; z-index: 1; display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 15px; border: 0; border-radius: 14px; background: var(--surface-solid); box-shadow: var(--shadow-soft); color: var(--primary); font-weight: 650; }
 .calendar-review-button span:last-child { font-size: 18px; }
 .calendar-review-note { color: var(--text-soft); font-size: 9px; line-height: 1.4; }
+.scroll-controls { position: fixed; right: max(12px, calc((100vw - 520px) / 2)); bottom: calc(82px + var(--safe-bottom)); z-index: 35; display: grid; gap: 8px; }
+.scroll-control { display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--line)); border-radius: 50%; background: color-mix(in srgb, var(--surface-solid) 94%, transparent); box-shadow: 0 8px 22px color-mix(in srgb, var(--text) 16%, transparent); color: var(--primary); font-size: 22px; font-weight: 800; backdrop-filter: blur(12px); }
+.scroll-control:disabled { opacity: .32; box-shadow: none; }
+.bottom-nav.is-hidden ~ .scroll-controls { bottom: calc(18px + var(--safe-bottom)); }
 .detail-list { display: grid; gap: 12px; margin: 17px 0 0; }
 .detail-list div { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .detail-list div:last-child { padding-bottom: 0; border-bottom: 0; }

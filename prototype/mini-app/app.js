@@ -32,6 +32,7 @@
     maxMeetingsPerDay: $('maxMeetingsPerDay'), bufferBeforeMinutes: $('bufferBeforeMinutes'),
     bufferAfterMinutes: $('bufferAfterMinutes'), saveScheduleSettings: $('saveScheduleSettings'),
     restrictionCount: $('restrictionCount'), blockedUserCount: $('blockedUserCount'), templateCount: $('templateCount'),
+    scrollControls: $('scrollControls'), scrollUp: $('scrollUp'), scrollDown: $('scrollDown'),
   };
 
   const state = {
@@ -124,6 +125,7 @@
       body.classList.toggle('admin-mode', session.user.role === 'ADMIN');
       elements.boot.classList.add('is-ready');
       if (session.user.role === 'ADMIN') void loadAdminQueue();
+      requestAnimationFrame(updateScrollControls);
     } catch (error) {
       elements.boot.classList.add('is-error');
       elements.bootTitle.textContent = 'Откройте приложение в Telegram';
@@ -158,6 +160,40 @@
     if (name === 'admin') void loadAdminQueue();
     if (name === 'admin-settings') void loadAdminSettings();
     scrollTo({ top: 0, behavior: 'smooth' });
+    requestAnimationFrame(updateScrollControls);
+  }
+
+  function scrollStopPositions() {
+    const candidates = document.querySelectorAll(
+      '.screen.is-active h1, .screen.is-active h2, .screen.is-active article, .screen.is-active form, .screen.is-active .detail-actions, .screen.is-active .info-strip, .screen.is-active .calendar-review-card',
+    );
+    const positions = [...candidates]
+      .filter((element) => element.offsetParent !== null)
+      .map((element) => Math.max(0, Math.round(element.getBoundingClientRect().top + scrollY - 14)))
+      .sort((left, right) => left - right);
+    return [0, ...positions, Math.max(0, document.documentElement.scrollHeight - innerHeight)]
+      .sort((left, right) => left - right)
+      .filter((value, index, all) => index === 0 || Math.abs(value - all[index - 1]) > 18);
+  }
+
+  function updateScrollControls() {
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+    const bootVisible = !elements.boot.classList.contains('is-ready');
+    const modalVisible = !elements.modal.classList.contains('is-hidden');
+    elements.scrollControls.classList.toggle('is-hidden', maxScroll < 28 || bootVisible || modalVisible);
+    elements.scrollUp.disabled = scrollY < 12;
+    elements.scrollDown.disabled = scrollY > maxScroll - 12;
+  }
+
+  function moveByScrollStop(direction) {
+    const positions = scrollStopPositions();
+    const target = direction > 0
+      ? positions.find((position) => position > scrollY + 24)
+      : positions.reverse().find((position) => position < scrollY - 24);
+    scrollTo({
+      top: target ?? (direction > 0 ? document.documentElement.scrollHeight : 0),
+      behavior: 'smooth',
+    });
   }
 
   function goBack() {
@@ -973,6 +1009,12 @@
   });
 
   elements.theme.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
+  elements.scrollUp.addEventListener('click', () => moveByScrollStop(-1));
+  elements.scrollDown.addEventListener('click', () => moveByScrollStop(1));
+  addEventListener('scroll', updateScrollControls, { passive: true });
+  addEventListener('resize', updateScrollControls);
+  new MutationObserver(() => requestAnimationFrame(updateScrollControls))
+    .observe($('app'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   elements.scheduleSettingsForm.addEventListener('submit', saveAdminSchedule);
   elements.back.addEventListener('click', goBack);
   elements.previous.addEventListener('click', () => setWizardStep(state.step - 1));

@@ -158,12 +158,18 @@ async function main(): Promise<void> {
           };
         },
       } as never,
+      {
+        getCalendarDayUrl: async () =>
+          'https://calendar.google.com/calendar/r/day/2030/2/1?authuser=owner%40example.com',
+      } as never,
     );
     const reviewPage = responseRecorder();
     await reviewController.showReview(validToken, reviewPage.response);
     assert.equal(reviewPage.status, 200);
     assert.match(reviewPage.body, /Подтвердить/u);
     assert.match(reviewPage.body, /Отклонить/u);
+    assert.match(reviewPage.body, /Вернуться в Google Calendar/u);
+    assert.match(reviewPage.body, /scrollControls/u);
     assert.deepEqual(webDecisions, []);
     const invalidPage = responseRecorder();
     await reviewController.showReview(`${validToken}x`, invalidPage.response);
@@ -175,6 +181,8 @@ async function main(): Promise<void> {
       decisionPage.response,
     );
     assert.equal(decisionPage.status, 200);
+    assert.match(decisionPage.body, /Вернуться в Google Calendar/u);
+    assert.doesNotMatch(decisionPage.body, /Можно закрыть эту вкладку/u);
     assert.deepEqual(webDecisions, ['confirm']);
 
     const first = await service.create({

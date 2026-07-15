@@ -59,7 +59,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.doesNotMatch(javascript, /adminDetailCode'\)\.textContent = `Заявка \$\{booking\.publicCode\}`/u);
   assert.match(javascript, /admin\/settings\/schedule/u);
   assert.match(javascript, /saveAdminSchedule/u);
+  assert.match(javascript, /moveByScrollStop/u);
+  assert.match(javascript, /updateScrollControls/u);
   assert.match(css, /calendar-review-card/u);
+  assert.match(css, /scroll-controls/u);
+  assert.match(html, /id="scrollUp"/u);
+  assert.match(html, /id="scrollDown"/u);
   assert.match(css, /integration-status-card/u);
   assert.match(html, /Календарь и расписание/u);
   assert.match(html, /Калининград · UTC\+2/u);
