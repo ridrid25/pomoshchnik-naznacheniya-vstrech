@@ -10,10 +10,11 @@ import { JsonLoggerService } from '../logging/json-logger.service';
 import { NotificationService } from '../notifications/notification.service';
 import { BookingService } from './booking.service';
 
-export type BookingDecisionAction = 'confirm' | 'reject';
+export type BookingDecisionAction = 'confirm' | 'reject' | 'block';
 export type BookingDecisionOutcome =
   | 'CONFIRMED'
   | 'REJECTED'
+  | 'BLOCKED'
   | 'SLOT_UNAVAILABLE'
   | 'CONFIRMATION_ERROR'
   | 'ALREADY_PROCESSED';
@@ -22,6 +23,11 @@ export interface BookingDecisionResult {
   bookingId: string;
   outcome: BookingDecisionOutcome;
   bookingStatus: BookingStatus;
+}
+
+export interface BookingDecisionOptions {
+  reason?: string | null;
+  adminTelegramId?: bigint;
 }
 
 @Injectable()
@@ -38,10 +44,11 @@ export class BookingDecisionService {
   decide(
     bookingId: string,
     action: BookingDecisionAction,
+    options: BookingDecisionOptions = {},
   ): Promise<BookingDecisionResult> {
     const current = this.active.get(bookingId);
     if (current) return current;
-    const decision = this.performDecision(bookingId, action).finally(() => {
+    const decision = this.performDecision(bookingId, action, options).finally(() => {
       this.active.delete(bookingId);
     });
     this.active.set(bookingId, decision);
@@ -51,13 +58,15 @@ export class BookingDecisionService {
   private async performDecision(
     bookingId: string,
     action: BookingDecisionAction,
+    options: BookingDecisionOptions,
   ): Promise<BookingDecisionResult> {
     const before = await this.prisma.booking.findUnique({
       where: { id: bookingId },
     });
     if (!before) throw new Error('Booking not found');
     const canRejectAfterTechnicalFailure =
-      action === 'reject' && before.status === BookingStatus.CONFIRMATION_ERROR;
+      (action === 'reject' || action === 'block') &&
+      before.status === BookingStatus.CONFIRMATION_ERROR;
     if (
       before.status !== BookingStatus.PENDING_APPROVAL &&
       !canRejectAfterTechnicalFailure
@@ -69,8 +78,37 @@ export class BookingDecisionService {
       };
     }
 
-    if (action === 'reject') {
-      const booking = await this.bookings.reject(bookingId);
+    if (action === 'reject' || action === 'block') {
+      if (action === 'block' && options.adminTelegramId === undefined) {
+        throw new Error('Admin Telegram id is required to block a user');
+      }
+      if (action === 'block' && before.status === BookingStatus.PENDING_APPROVAL) {
+        if (options.reason !== undefined) {
+          await this.prisma.booking.update({
+            where: { id: bookingId },
+            data: { rejectionReason: options.reason },
+          });
+        }
+        await this.bookings.setUserBlocked(
+          before.userId,
+          true,
+          options.adminTelegramId!,
+          options.reason,
+        );
+      } else {
+        await this.bookings.reject(bookingId, options.reason);
+        if (action === 'block') {
+          await this.bookings.setUserBlocked(
+            before.userId,
+            true,
+            options.adminTelegramId!,
+            options.reason,
+          );
+        }
+      }
+      const booking = await this.prisma.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+      });
       await this.notifications.notifyUser({
         userId: booking.userId,
         bookingId,
@@ -83,7 +121,7 @@ export class BookingDecisionService {
       this.logDecision(bookingId, action, BookingStatus.REJECTED);
       return {
         bookingId,
-        outcome: 'REJECTED',
+        outcome: action === 'block' ? 'BLOCKED' : 'REJECTED',
         bookingStatus: BookingStatus.REJECTED,
       };
     }

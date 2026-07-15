@@ -39,6 +39,9 @@ chmod 600 .env.production
 - `GOOGLE_OAUTH_REDIRECT_URI=https://DOMAIN/google/oauth/callback` с реальным доменом;
 - `PUBLIC_BASE_URL=https://DOMAIN` — публичный HTTPS-адрес без пути в конце;
 - `ADMIN_ACTION_SECRET` — отдельный случайный секрет для ссылок из Google Calendar, например результат `openssl rand -hex 32`;
+- `MINI_APP_SESSION_SECRET` — отдельный случайный секрет не короче 32 символов, например результат `openssl rand -hex 32`;
+- `MINI_APP_SESSION_TTL_SECONDS=7200` — срок защищённой Mini App-сессии;
+- `MINI_APP_INIT_DATA_MAX_AGE_SECONDS=600` — допустимый возраст Telegram `initData`;
 - SMTP-поля — только после выбора почтового провайдера.
 
 Обязательные production-значения нельзя хранить в Git или присылать в чат.
@@ -75,6 +78,16 @@ docker compose --env-file .env.production --profile bundled-proxy logs --tail=10
 ```
 
 Ожидаемый результат: `app` получает статус `healthy`, выбранный Caddy выпускает TLS-сертификат, а `https://DOMAIN/health` возвращает JSON со `status=ok`.
+
+Дополнительно проверьте Mini App:
+
+```bash
+curl --fail --silent --show-error "https://DOMAIN/mini-app" | grep 'Запись на встречу'
+curl --fail --silent --show-error "https://DOMAIN/mini-app/app.js" | grep 'idempotencyKey'
+sh scripts/verify-production-mini-app.sh /opt/meeting-assistant
+```
+
+При каждом старте backend настраивает стандартную кнопку меню Telegram через `setChatMenuButton`. Она должна иметь тип `web_app` и вести строго на `https://DOMAIN/mini-app`.
 
 ## 5. Установка Telegram webhook
 

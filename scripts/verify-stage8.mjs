@@ -41,12 +41,15 @@ requireMarkers('workflow', [
   'npm ci',
   'cp .env.production.example .env.production',
   'npm test',
+  'prototype \\',
   'VPS_SSH_PRIVATE_KEY',
   'VPS_KNOWN_HOSTS',
   'StrictHostKeyChecking yes',
   'scp "$RELEASE_ARCHIVE"',
   '/usr/local/sbin/deploy-meeting-assistant',
   'Verify public health endpoint',
+  '${base_url}/mini-app',
+  '${base_url}/mini-app/app.js',
 ]);
 
 requireMarkers('deploy', [
@@ -56,11 +59,15 @@ requireMarkers('deploy', [
   'Unsafe path found in release archive',
   'Release archive contains a link or special file',
   'Release must not contain .env.production',
+  'MINI_APP_ENV_MIGRATION=session_secret_added',
+  'MINI_APP_SESSION_TTL_SECONDS=7200',
   'docker buildx build --load',
   'app-before-${commit_sha}',
   'DEPLOY_ROLLBACK=started',
   'meeting-assistant-app:local',
   'http://127.0.0.1:3020/health',
+  'http://127.0.0.1:3020/mini-app',
+  'http://127.0.0.1:3020/mini-app/app.js',
   '.deployed-sha',
 ]);
 

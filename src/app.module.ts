@@ -12,6 +12,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { GoogleCalendarModule } from './google-calendar/google-calendar.module';
 import { LoggingModule } from './logging/logging.module';
+import { MiniAppModule } from './mini-app/mini-app.module';
 import { NotificationModule } from './notifications/notification.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { TelegramModule } from './telegram/telegram.module';
@@ -35,6 +36,7 @@ import { TelegramModule } from './telegram/telegram.module';
     BookingsModule,
     GoogleCalendarModule,
     NotificationModule,
+    MiniAppModule,
     HealthModule,
     SchedulerModule,
     TelegramModule,

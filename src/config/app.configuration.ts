@@ -12,4 +12,12 @@ export default registerAs('app', () => ({
   adminTelegramId: process.env.ADMIN_TELEGRAM_ID?.trim() || null,
   publicBaseUrl: process.env.PUBLIC_BASE_URL?.trim().replace(/\/$/u, '') || null,
   adminActionSecret: process.env.ADMIN_ACTION_SECRET?.trim() || null,
+  miniAppSessionSecret:
+    process.env.MINI_APP_SESSION_SECRET?.trim() || null,
+  miniAppSessionTtlSeconds: Number(
+    process.env.MINI_APP_SESSION_TTL_SECONDS ?? 7200,
+  ),
+  miniAppInitDataMaxAgeSeconds: Number(
+    process.env.MINI_APP_INIT_DATA_MAX_AGE_SECONDS ?? 600,
+  ),
 }));

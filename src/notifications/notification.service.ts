@@ -68,6 +68,17 @@ export class NotificationService {
     return Boolean(this.smtpTransport && this.smtpFrom);
   }
 
+  async notifyAdmin(text: string): Promise<void> {
+    if (!this.telegramBot || !this.adminTelegramId) return;
+    try {
+      await this.telegramBot.api.sendMessage(this.adminTelegramId, text);
+    } catch (error: unknown) {
+      this.logger.errorEvent('NotificationService', 'admin.notification.failed', {
+        error_message: this.safeError(error),
+      });
+    }
+  }
+
   async notifyUser(input: UserNotificationInput): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id: input.userId } });
     if (!user) throw new Error('Notification user not found');
@@ -199,17 +210,7 @@ export class NotificationService {
   }
 
   private async notifyAdminTechnicalFailure(text: string): Promise<void> {
-    if (!this.telegramBot || !this.adminTelegramId) return;
-    try {
-      await this.telegramBot.api.sendMessage(
-        this.adminTelegramId,
-        `⚠️ Техническое уведомление\n${text}`,
-      );
-    } catch (error: unknown) {
-      this.logger.errorEvent('NotificationService', 'admin.notification.failed', {
-        error_message: this.safeError(error),
-      });
-    }
+    await this.notifyAdmin(`⚠️ Техническое уведомление\n${text}`);
   }
 
   private safeError(error: unknown): string {

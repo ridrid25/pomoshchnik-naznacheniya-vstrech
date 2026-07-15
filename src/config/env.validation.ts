@@ -36,6 +36,15 @@ export function validateEnvironment(
   ).trim();
   const publicBaseUrl = String(config.PUBLIC_BASE_URL ?? '').trim();
   const adminActionSecret = String(config.ADMIN_ACTION_SECRET ?? '').trim();
+  const miniAppSessionSecret = String(
+    config.MINI_APP_SESSION_SECRET ?? '',
+  ).trim();
+  const miniAppSessionTtlSeconds = Number(
+    config.MINI_APP_SESSION_TTL_SECONDS ?? 7200,
+  );
+  const miniAppInitDataMaxAgeSeconds = Number(
+    config.MINI_APP_INIT_DATA_MAX_AGE_SECONDS ?? 600,
+  );
   const smtpHost = String(config.SMTP_HOST ?? '').trim();
   const smtpPort = Number(config.SMTP_PORT ?? 587);
   const smtpSecure = parseBoolean(config.SMTP_SECURE ?? false, 'SMTP_SECURE');
@@ -122,6 +131,32 @@ export function validateEnvironment(
   if (adminActionSecret && adminActionSecret.length < 32) {
     throw new Error('ADMIN_ACTION_SECRET must contain at least 32 characters');
   }
+  if (miniAppSessionSecret && miniAppSessionSecret.length < 32) {
+    throw new Error('MINI_APP_SESSION_SECRET must contain at least 32 characters');
+  }
+  if (nodeEnv === 'production' && publicBaseUrl && !miniAppSessionSecret) {
+    throw new Error(
+      'MINI_APP_SESSION_SECRET is required with PUBLIC_BASE_URL in production',
+    );
+  }
+  if (
+    !Number.isInteger(miniAppSessionTtlSeconds) ||
+    miniAppSessionTtlSeconds < 300 ||
+    miniAppSessionTtlSeconds > 86_400
+  ) {
+    throw new Error(
+      'MINI_APP_SESSION_TTL_SECONDS must be an integer between 300 and 86400',
+    );
+  }
+  if (
+    !Number.isInteger(miniAppInitDataMaxAgeSeconds) ||
+    miniAppInitDataMaxAgeSeconds < 60 ||
+    miniAppInitDataMaxAgeSeconds > 3600
+  ) {
+    throw new Error(
+      'MINI_APP_INIT_DATA_MAX_AGE_SECONDS must be an integer between 60 and 3600',
+    );
+  }
   if (nodeEnv === 'production' && googleRedirectUri && !publicBaseUrl) {
     throw new Error(
       'PUBLIC_BASE_URL and ADMIN_ACTION_SECRET are required with Google Calendar in production',
@@ -152,6 +187,9 @@ export function validateEnvironment(
   config.GOOGLE_OAUTH_REDIRECT_URI = googleRedirectUri;
   config.PUBLIC_BASE_URL = publicBaseUrl.replace(/\/$/u, '');
   config.ADMIN_ACTION_SECRET = adminActionSecret;
+  config.MINI_APP_SESSION_SECRET = miniAppSessionSecret;
+  config.MINI_APP_SESSION_TTL_SECONDS = miniAppSessionTtlSeconds;
+  config.MINI_APP_INIT_DATA_MAX_AGE_SECONDS = miniAppInitDataMaxAgeSeconds;
   config.SMTP_HOST = smtpHost;
   config.SMTP_PORT = smtpPort;
   config.SMTP_SECURE = smtpSecure;

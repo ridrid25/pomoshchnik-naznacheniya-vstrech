@@ -72,13 +72,27 @@ fi
 tar -xzf "$archive" -C "$staging" --no-same-owner --no-same-permissions
 [ -z "$(find "$staging" -type l -print -quit)" ] || fail "Release extraction contains a symbolic link"
 
-for required in Dockerfile docker-compose.yml package.json package-lock.json prisma.config.ts tsconfig.json tsconfig.build.json src prisma scripts; do
+for required in Dockerfile docker-compose.yml package.json package-lock.json prisma.config.ts tsconfig.json tsconfig.build.json src prisma prototype scripts; do
   [ -e "$staging/$required" ] || fail "Required release item is missing: $required"
 done
 [ ! -e "$staging/.env" ] || fail "Release must not contain .env"
 [ ! -e "$staging/.env.production" ] || fail "Release must not contain .env.production"
 [ -f "$app_dir/.env.production" ] || fail "Server .env.production is missing"
 [ -s "$app_dir/data/app.db" ] || fail "Production database is missing or empty"
+
+if ! grep -Eq '^MINI_APP_SESSION_SECRET=.{32,}$' "$app_dir/.env.production"; then
+  env_temporary="$app_dir/.env.production.mini-app.tmp"
+  awk '!/^MINI_APP_SESSION_SECRET=/' "$app_dir/.env.production" > "$env_temporary"
+  printf '\nMINI_APP_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)" >> "$env_temporary"
+  chmod 600 "$env_temporary"
+  mv "$env_temporary" "$app_dir/.env.production"
+  printf 'MINI_APP_ENV_MIGRATION=session_secret_added\n'
+fi
+grep -Eq '^MINI_APP_SESSION_TTL_SECONDS=' "$app_dir/.env.production" || \
+  printf 'MINI_APP_SESSION_TTL_SECONDS=7200\n' >> "$app_dir/.env.production"
+grep -Eq '^MINI_APP_INIT_DATA_MAX_AGE_SECONDS=' "$app_dir/.env.production" || \
+  printf 'MINI_APP_INIT_DATA_MAX_AGE_SECONDS=600\n' >> "$app_dir/.env.production"
+chmod 600 "$app_dir/.env.production"
 
 docker buildx create --name "$builder" --driver docker-container --use >/dev/null
 builder_created=true
@@ -100,7 +114,7 @@ chmod 600 "$backup"
 [ -s "$backup" ] || fail "Database backup is empty"
 release_started=true
 
-rm -rf "$app_dir/src" "$app_dir/prisma" "$app_dir/scripts"
+rm -rf "$app_dir/src" "$app_dir/prisma" "$app_dir/prototype" "$app_dir/scripts"
 rm -f \
   "$app_dir/.dockerignore" \
   "$app_dir/Caddyfile" \
@@ -124,6 +138,10 @@ start_and_wait() {
       status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)
     fi
     if [ "$status" = healthy ] && curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3020/health >/dev/null; then
+      mini_app_html=$(curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3020/mini-app) || return 1
+      mini_app_js=$(curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3020/mini-app/app.js) || return 1
+      printf '%s' "$mini_app_html" | grep -Fq 'Запись на встречу' || return 1
+      printf '%s' "$mini_app_js" | grep -Fq 'idempotencyKey' || return 1
       return 0
     fi
     [ "$status" != unhealthy ] || return 1

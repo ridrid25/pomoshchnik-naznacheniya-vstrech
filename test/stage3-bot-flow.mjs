@@ -34,6 +34,9 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
       TELEGRAM_DEV_POLLING: 'false',
       TELEGRAM_API_ROOT: `http://127.0.0.1:${telegramPort}`,
       ADMIN_TELEGRAM_ID: '9002',
+      PUBLIC_BASE_URL: `http://127.0.0.1:${appPort}`,
+      ADMIN_ACTION_SECRET: 'stage3-admin-action-secret-1234567890',
+      MINI_APP_SESSION_SECRET: 'stage3-mini-app-session-secret-1234567890',
       GOOGLE_OAUTH_CLIENT_ID: '',
       GOOGLE_OAUTH_CLIENT_SECRET: '',
       GOOGLE_OAUTH_REDIRECT_URI: '',
@@ -93,6 +96,12 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
   try {
     await waitForHealth(appPort, child, stdout, stderr);
     setGoogleAccountEmail(databasePath, 'owner@example.com');
+    const miniAppUrl = `http://127.0.0.1:${appPort}/mini-app`;
+    const menuButtonRequest = telegramRequests.find(
+      (request) => request.method === 'setChatMenuButton',
+    );
+    assert.equal(menuButtonRequest?.body.menu_button?.type, 'web_app');
+    assert.equal(menuButtonRequest?.body.menu_button?.web_app?.url, miniAppUrl);
 
     try {
       await sendMessageUpdate(9001, '/start');
@@ -101,6 +110,10 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
         `${error instanceof Error ? error.message : String(error)}\n${stdout.join('')}\n${stderr.join('')}`,
       );
     }
+    assert.equal(
+      lastWebAppUrl(telegramRequests, '✨ Открыть приложение'),
+      miniAppUrl,
+    );
     await sendCallback(9001, 'notification:menu');
     await sendCallback(9001, 'notification:email');
     await sendMessageUpdate(9001, 'not-an-email');
@@ -451,6 +464,22 @@ function lastButtonUrl(requests, label) {
     }
   }
   throw new Error(`URL button not found: ${label}`);
+}
+
+function lastWebAppUrl(requests, label) {
+  for (let index = requests.length - 1; index >= 0; index -= 1) {
+    const request = requests[index];
+    if (request.method !== 'sendMessage') continue;
+    const markup =
+      typeof request.body.reply_markup === 'string'
+        ? JSON.parse(request.body.reply_markup)
+        : request.body.reply_markup;
+    for (const row of markup?.inline_keyboard ?? []) {
+      const button = row.find((item) => item.text === label && item.web_app?.url);
+      if (button) return button.web_app.url;
+    }
+  }
+  throw new Error(`Web App button not found: ${label}`);
 }
 
 function lastSentText(requests) {

@@ -1,12 +1,16 @@
+import { randomBytes } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 
 import { AvailabilityService } from '../availability/availability.service';
 import { PrismaService } from '../database/prisma.service';
 import {
   BookingStatus,
+  BookingSource,
   BookingType,
   CalendarSyncStatus,
   MeetingFormat,
+  Prisma,
   SlotReservationStatus,
   UserStatus,
   type User,
@@ -26,8 +30,18 @@ export interface CreateBookingInput {
   comment?: string;
   email?: string;
   type?: BookingType;
+  source?: BookingSource;
+  idempotencyKey?: string;
   originalBookingId?: string;
   meetingFormat?: MeetingFormat;
+  verifyAvailability?: boolean;
+}
+
+export class BookingSlotUnavailableError extends Error {
+  constructor() {
+    super('Selected slot is no longer available');
+    this.name = 'BookingSlotUnavailableError';
+  }
 }
 
 export type ConfirmationResult =
@@ -50,6 +64,15 @@ export class BookingService {
   ) {}
 
   async create(input: CreateBookingInput) {
+    const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+    if (idempotencyKey) {
+      const existing = await this.findIdempotentBooking(
+        input.userId,
+        idempotencyKey,
+      );
+      if (existing) return existing;
+    }
+
     if (input.type === BookingType.RESCHEDULE) {
       if (!input.originalBookingId) {
         throw new Error('Original booking is required for reschedule');
@@ -64,41 +87,80 @@ export class BookingService {
       });
       if (!original) throw new Error('Confirmed original booking not found');
     }
+    if (input.verifyAvailability) {
+      const { date, time } = dateAndTimeInZone(input.startAt, input.timezone);
+      const available = await this.availability.isSlotAvailable(
+        date,
+        time,
+        input.durationMinutes,
+      );
+      if (!available) throw new BookingSlotUnavailableError();
+    }
     const endAt = new Date(
       input.startAt.getTime() + input.durationMinutes * 60_000,
     );
     const expiresAt = new Date(Date.now() + BOOKING_TTL_MS);
-    const booking = await this.prisma.booking.create({
-      data: {
-        userId: input.userId,
-        type: input.type ?? BookingType.NEW,
-        meetingFormat: input.meetingFormat ?? MeetingFormat.ONLINE,
-        durationMinutes: input.durationMinutes,
-        startAt: input.startAt,
-        timezone: input.timezone,
-        title: input.title,
-        comment: input.comment,
-        emailSnapshot: input.email,
-        status: BookingStatus.PENDING_APPROVAL,
-        expiresAt,
-        originalBookingId: input.originalBookingId,
-        slotReservation: {
-          create: {
-            startAt: input.startAt,
-            endAt,
-            expiresAt,
-            status: SlotReservationStatus.ACTIVE,
+    let booking;
+    try {
+      booking = await this.prisma.booking.create({
+        data: {
+          publicCode: createPublicBookingCode(),
+          idempotencyKey,
+          userId: input.userId,
+          type: input.type ?? BookingType.NEW,
+          source: input.source ?? BookingSource.TELEGRAM_BOT,
+          meetingFormat: input.meetingFormat ?? MeetingFormat.ONLINE,
+          durationMinutes: input.durationMinutes,
+          startAt: input.startAt,
+          timezone: input.timezone,
+          title: input.title,
+          comment: input.comment,
+          emailSnapshot: input.email,
+          status: BookingStatus.PENDING_APPROVAL,
+          expiresAt,
+          originalBookingId: input.originalBookingId,
+          slotReservation: {
+            create: {
+              startAt: input.startAt,
+              endAt,
+              expiresAt,
+              status: SlotReservationStatus.ACTIVE,
+            },
           },
         },
-      },
-      include: { user: true },
-    });
+        include: { user: true },
+      });
+    } catch (error: unknown) {
+      if (idempotencyKey && isUniqueConstraintError(error)) {
+        const existing = await this.findIdempotentBooking(
+          input.userId,
+          idempotencyKey,
+        );
+        if (existing) return existing;
+      }
+      throw error;
+    }
     this.log('booking.created', booking.id, { user_id: input.userId });
     await this.createPendingCalendarMarker(booking);
     return this.prisma.booking.findUniqueOrThrow({
       where: { id: booking.id },
       include: { user: true, calendarEvent: true },
     });
+  }
+
+  private async findIdempotentBooking(
+    userId: string,
+    idempotencyKey: string,
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { idempotencyKey },
+      include: { user: true, calendarEvent: true },
+    });
+    if (!booking) return null;
+    if (booking.userId !== userId) {
+      throw new Error('Idempotency key belongs to another user');
+    }
+    return booking;
   }
 
   async syncPendingCalendarMarkers(): Promise<number> {
@@ -276,26 +338,36 @@ export class BookingService {
     }
   }
 
-  async reject(bookingId: string) {
+  async reject(bookingId: string, rejectionReason?: string | null) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { user: true, calendarEvent: true },
     });
     if (!booking) throw new Error('Booking not found');
+    if (rejectionReason !== undefined) {
+      await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { rejectionReason },
+      });
+    }
     await this.finishWithReleasedReservation(
       booking.id,
       BookingStatus.REJECTED,
     );
     this.log('booking.rejected', booking.id);
-    return booking;
+    return this.prisma.booking.findUniqueOrThrow({
+      where: { id: bookingId },
+      include: { user: true, calendarEvent: true },
+    });
   }
 
-  async cancelByUser(bookingId: string, userId: string): Promise<void> {
+  async cancelByUser(bookingId: string, userId: string): Promise<boolean> {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, userId },
       include: { calendarEvent: true },
     });
     if (!booking) throw new Error('Booking not found');
+    if (booking.status === BookingStatus.CANCELLED_BY_USER) return false;
     if (
       booking.status !== BookingStatus.PENDING_APPROVAL &&
       booking.status !== BookingStatus.CONFIRMED
@@ -327,6 +399,7 @@ export class BookingService {
       }
     });
     this.log('booking.cancelled_by_user', booking.id);
+    return true;
   }
 
   async expirePending(now = new Date()): Promise<ExpiredBooking[]> {
@@ -414,6 +487,7 @@ export class BookingService {
     userId: string,
     blocked: boolean,
     adminTelegramId: bigint,
+    reason?: string | null,
   ): Promise<void> {
     const pending = blocked
       ? await this.prisma.booking.findMany({
@@ -441,12 +515,14 @@ export class BookingService {
         where: { userId },
         update: {
           active: blocked,
+          reason: blocked && reason !== undefined ? reason : undefined,
           removedAt: blocked ? null : new Date(),
           createdByTelegramId: adminTelegramId,
         },
         create: {
           userId,
           active: blocked,
+          reason: blocked ? reason : null,
           removedAt: blocked ? null : new Date(),
           createdByTelegramId: adminTelegramId,
         },
@@ -623,6 +699,25 @@ export class BookingService {
       ...fields,
     });
   }
+}
+
+function createPublicBookingCode(): string {
+  return `M-${randomBytes(5).toString('hex').toUpperCase()}`;
+}
+
+function normalizeIdempotencyKey(value?: string): string | null {
+  if (value === undefined) return null;
+  const normalized = value.trim();
+  if (!/^[A-Za-z0-9._:-]{8,128}$/u.test(normalized)) {
+    throw new Error('Invalid idempotency key');
+  }
+  return normalized;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+  );
 }
 
 function dateAndTimeInZone(

@@ -4,11 +4,13 @@ import { ConfigService } from '@nestjs/config';
 
 import { AdminReviewController } from '../src/bookings/admin-review.controller';
 import { AdminReviewTokenService } from '../src/bookings/admin-review-token.service';
+import { BookingDecisionService } from '../src/bookings/booking-decision.service';
 import { BookingService } from '../src/bookings/booking.service';
 import { createPrismaClient } from '../src/database/prisma-client.factory';
 import { applySqliteMigrations } from '../src/database/sqlite-migrator';
 import {
   BookingStatus,
+  BookingSource,
   BookingType,
   MessageTemplateType,
   MeetingFormat,
@@ -177,11 +179,27 @@ async function main(): Promise<void> {
 
     const first = await service.create({
       userId: user.id,
+      source: BookingSource.MINI_APP,
+      idempotencyKey: 'stage6-mini-app-create-1',
       durationMinutes: 45,
       startAt: new Date('2030-02-01T09:00:00.000Z'),
       timezone: 'Europe/Moscow',
       title: 'Stage 6 confirmation',
     });
+    assert.match(first.publicCode ?? '', /^M-[A-F0-9]{10}$/u);
+    assert.equal(first.source, BookingSource.MINI_APP);
+    assert.equal(first.idempotencyKey, 'stage6-mini-app-create-1');
+    const repeatedFirst = await service.create({
+      userId: user.id,
+      source: BookingSource.MINI_APP,
+      idempotencyKey: 'stage6-mini-app-create-1',
+      durationMinutes: 45,
+      startAt: new Date('2030-02-01T09:00:00.000Z'),
+      timezone: 'Europe/Moscow',
+      title: 'Stage 6 confirmation',
+    });
+    assert.equal(repeatedFirst.id, first.id);
+    assert.equal(eventSequence, 1);
     assert.equal(first.emailSnapshot, null);
     assert.equal(first.calendarEvent?.syncStatus, 'PENDING');
     assert.equal(first.calendarEvent?.googleEventId, 'stage6-pending-1');
@@ -190,8 +208,32 @@ async function main(): Promise<void> {
         'https://meeting.example.com/admin/review/',
       ),
     );
-    const confirmation = await service.confirm(first.id);
-    assert.equal(confirmation.status, 'CONFIRMED');
+    const decisionNotifications: string[] = [];
+    const decisionService = new BookingDecisionService(
+      prisma as never,
+      service,
+      {
+        notifyUser: async (input: { eventType: string }) => {
+          decisionNotifications.push(input.eventType);
+        },
+      } as never,
+      new JsonLoggerService(),
+    );
+    const [adminAccountOne, adminAccountTwo] = await Promise.all([
+      decisionService.decide(first.id, 'confirm'),
+      decisionService.decide(first.id, 'confirm'),
+    ]);
+    assert.equal(adminAccountOne.outcome, 'CONFIRMED');
+    assert.equal(adminAccountTwo.outcome, 'CONFIRMED');
+    assert.deepEqual(decisionNotifications, ['BOOKING_CONFIRMED']);
+    assert.equal(
+      await prisma.calendarEvent.count({ where: { bookingId: first.id } }),
+      1,
+    );
+    assert.equal(
+      (await decisionService.decide(first.id, 'confirm')).outcome,
+      'ALREADY_PROCESSED',
+    );
     const confirmed = await prisma.booking.findUniqueOrThrow({
       where: { id: first.id },
       include: { calendarEvent: true, slotReservation: true },
@@ -262,12 +304,13 @@ async function main(): Promise<void> {
       title: 'Stage 6 rejection',
       email: 'stage6@example.com',
     });
-    await service.reject(second.id);
+    await service.reject(second.id, 'Stage 6 reason');
     const rejected = await prisma.booking.findUniqueOrThrow({
       where: { id: second.id },
       include: { slotReservation: true, calendarEvent: true },
     });
     assert.equal(rejected.status, BookingStatus.REJECTED);
+    assert.equal(rejected.rejectionReason, 'Stage 6 reason');
     assert.equal(
       rejected.slotReservation?.status,
       SlotReservationStatus.RELEASED,
@@ -284,7 +327,7 @@ async function main(): Promise<void> {
       timezone: 'Europe/Moscow',
       title: 'Stage 6 block',
     });
-    await service.setUserBlocked(user.id, true, 6999n);
+    await service.setUserBlocked(user.id, true, 6999n, 'Stage 6 block reason');
     const blocked = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
     });
@@ -293,6 +336,10 @@ async function main(): Promise<void> {
       include: { slotReservation: true, calendarEvent: true },
     });
     assert.equal(blocked.status, UserStatus.BANNED);
+    assert.equal(
+      (await prisma.blacklistEntry.findUniqueOrThrow({ where: { userId: user.id } })).reason,
+      'Stage 6 block reason',
+    );
     assert.equal(autoRejected.status, BookingStatus.REJECTED);
     assert.equal(
       autoRejected.slotReservation?.status,
@@ -454,6 +501,7 @@ async function main(): Promise<void> {
         meeting_format_checked: true,
         expiration_checked: true,
         block_auto_reject_checked: true,
+        two_admin_one_calendar_event_checked: true,
         unblock_checked: true,
         email_routing_checked: true,
         telegram_routing_checked: true,

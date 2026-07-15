@@ -144,6 +144,7 @@ function decisionResult(outcome: BookingDecisionOutcome): string {
   const result: Record<BookingDecisionOutcome, [string, string]> = {
     CONFIRMED: ['success', '✓ Заявка подтверждена. Серое событие стало обычной встречей.'],
     REJECTED: ['rejected', '✕ Заявка отклонена. Серое событие убрано из календаря.'],
+    BLOCKED: ['rejected', '✕ Заявка отклонена, пользователь заблокирован.'],
     SLOT_UNAVAILABLE: ['error', 'Время уже занято. Заявка закрыта.'],
     CONFIRMATION_ERROR: ['error', 'Не удалось создать событие Google Calendar. Проверьте Telegram.'],
     ALREADY_PROCESSED: ['neutral', 'Эта заявка уже была обработана ранее. Повторное действие не выполнено.'],

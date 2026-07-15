@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   BookingStatus,
+  BookingSource,
   BookingType,
   CalendarSyncStatus,
   MessageTemplateType,
@@ -14,6 +15,7 @@ import {
   UserStatus,
 } from '../src/generated/prisma/client';
 import { createPrismaClient } from '../src/database/prisma-client.factory';
+import { ensureDefaultData } from '../src/database/default-data';
 
 const prisma = createPrismaClient();
 
@@ -31,6 +33,41 @@ async function main(): Promise<void> {
 
   const templateCount = await prisma.messageTemplate.count();
   assert.equal(templateCount, Object.keys(MessageTemplateType).length);
+
+  const customizedPeriod = settings.workingPeriods[0];
+  const customizedTemplateType = MessageTemplateType.BOOKING_SUBMITTED;
+  await prisma.scheduleSettings.update({
+    where: { id: 1 },
+    data: { timezone: 'Asia/Yekaterinburg' },
+  });
+  await prisma.scheduleWorkingPeriod.update({
+    where: { id: customizedPeriod.id },
+    data: { startMinute: 10 * 60 },
+  });
+  await prisma.messageTemplate.update({
+    where: { type: customizedTemplateType },
+    data: { text: 'Custom administrator template' },
+  });
+  await ensureDefaultData(prisma);
+  const preservedSettings = await prisma.scheduleSettings.findUniqueOrThrow({
+    where: { id: 1 },
+    include: { workingPeriods: true },
+  });
+  assert.equal(preservedSettings.timezone, 'Asia/Yekaterinburg');
+  assert.equal(
+    preservedSettings.workingPeriods.find(
+      (period) => period.id === customizedPeriod.id,
+    )?.startMinute,
+    10 * 60,
+  );
+  assert.equal(
+    (
+      await prisma.messageTemplate.findUniqueOrThrow({
+        where: { type: customizedTemplateType },
+      })
+    ).text,
+    'Custom administrator template',
+  );
 
   const user = await prisma.user.create({
     data: {
@@ -67,6 +104,9 @@ async function main(): Promise<void> {
   const booking = await prisma.booking.create({
     data: {
       userId: user.id,
+      publicCode: 'M-STAGE2-1',
+      idempotencyKey: 'stage2-booking-identity',
+      source: BookingSource.MINI_APP,
       type: BookingType.NEW,
       durationMinutes: 30,
       startAt,
@@ -95,6 +135,9 @@ async function main(): Promise<void> {
     include: { slotReservation: true, calendarEvent: true, user: true },
   });
   assert.equal(booking.user.id, user.id);
+  assert.equal(booking.publicCode, 'M-STAGE2-1');
+  assert.equal(booking.idempotencyKey, 'stage2-booking-identity');
+  assert.equal(booking.source, BookingSource.MINI_APP);
   assert.equal(booking.meetingFormat, MeetingFormat.ONLINE);
   assert.equal(booking.slotReservation?.bookingId, booking.id);
   assert.equal(booking.calendarEvent?.bookingId, booking.id);

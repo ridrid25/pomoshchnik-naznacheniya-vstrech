@@ -26,6 +26,12 @@ enum BookingType {
   CANCEL
 }
 
+enum BookingSource {
+  TELEGRAM_BOT
+  MINI_APP
+  ADMIN
+}
+
 enum MeetingFormat {
   ONLINE
   IN_PERSON
@@ -104,8 +110,11 @@ model User {
 
 model Booking {
   id                     String                 @id @default(cuid())
+  publicCode             String?                @unique
+  idempotencyKey         String?                @unique
   userId                 String
   type                   BookingType            @default(NEW)
+  source                 BookingSource          @default(TELEGRAM_BOT)
   meetingFormat          MeetingFormat          @default(ONLINE)
   durationMinutes        Int
   startAt                DateTime

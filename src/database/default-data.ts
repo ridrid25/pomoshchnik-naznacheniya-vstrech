@@ -44,14 +44,7 @@ const DEFAULT_TEMPLATES: Array<{
 export async function ensureDefaultData(prisma: PrismaClient): Promise<void> {
   await prisma.scheduleSettings.upsert({
     where: { id: 1 },
-    update: {
-      minimumLeadTimeMinutes: 1440,
-      bufferBeforeMinutes: 0,
-      bufferAfterMinutes: 0,
-      maxMeetingsPerDay: 4,
-      bookingHorizonDays: 30,
-      timezone: 'Europe/Moscow',
-    },
+    update: {},
     create: {
       id: 1,
       minimumLeadTimeMinutes: 1440,
@@ -63,23 +56,25 @@ export async function ensureDefaultData(prisma: PrismaClient): Promise<void> {
     },
   });
 
-  await prisma.scheduleWorkingPeriod.deleteMany({
+  const workingPeriodCount = await prisma.scheduleWorkingPeriod.count({
     where: { scheduleSettingsId: 1 },
   });
-  await prisma.scheduleWorkingPeriod.createMany({
-    data: [1, 2, 3, 4, 5].map((weekday) => ({
-      scheduleSettingsId: 1,
-      weekday,
-      startMinute: 9 * 60,
-      endMinute: 18 * 60,
-      enabled: true,
-    })),
-  });
+  if (workingPeriodCount === 0) {
+    await prisma.scheduleWorkingPeriod.createMany({
+      data: [1, 2, 3, 4, 5].map((weekday) => ({
+        scheduleSettingsId: 1,
+        weekday,
+        startMinute: 9 * 60,
+        endMinute: 18 * 60,
+        enabled: true,
+      })),
+    });
+  }
 
   for (const template of DEFAULT_TEMPLATES) {
     await prisma.messageTemplate.upsert({
       where: { type: template.type },
-      update: { text: template.text },
+      update: {},
       create: template,
     });
   }

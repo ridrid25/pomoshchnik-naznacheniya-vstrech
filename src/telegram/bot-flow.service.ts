@@ -68,6 +68,7 @@ interface BookingDraft {
 export class BotFlowService implements OnModuleInit, OnModuleDestroy {
   private readonly bot: Bot | null;
   private readonly adminTelegramId: string | null;
+  private readonly miniAppUrl: string | null;
   private readonly devPolling: boolean;
   private readonly drafts = new Map<string, BookingDraft>();
   private readonly pendingNotificationEmail = new Set<string>();
@@ -84,6 +85,8 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
   ) {
     const token = config.get<string | null>('app.telegramBotToken');
     this.adminTelegramId = config.get<string | null>('app.adminTelegramId') ?? null;
+    const publicBaseUrl = config.get<string | null>('app.publicBaseUrl') ?? null;
+    this.miniAppUrl = publicBaseUrl ? `${publicBaseUrl}/mini-app` : null;
     this.devPolling = config.get<boolean>('app.telegramDevPolling') ?? false;
     const apiRoot = config.get<string | null>('app.telegramApiRoot');
     this.bot = token
@@ -110,6 +113,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       { command: 'notifications', description: 'Канал уведомлений' },
       { command: 'admin', description: 'Меню администратора' },
     ]);
+    await this.configureMiniAppMenu();
 
     if (!this.devPolling) {
       this.logger.logEvent('BotFlowService', 'telegram.webhook.ready');
@@ -368,7 +372,10 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       this.drafts.delete(String(user.telegramId));
       this.logFlow('booking.flow.cancelled', user);
       await ctx.reply('Запись отменена. Заявка и резерв не создавались.', {
-        reply_markup: mainMenuKeyboard(this.isAdmin(user.telegramId)),
+        reply_markup: mainMenuKeyboard(
+          this.isAdmin(user.telegramId),
+          this.miniAppUrl,
+        ),
       });
     });
 
@@ -484,7 +491,10 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
             'Встреча отменена. Если событие уже было создано, оно отменено и в Google Calendar.',
         });
         await ctx.reply('Готово. Слот освобождён.', {
-          reply_markup: mainMenuKeyboard(this.isAdmin(user.telegramId)),
+          reply_markup: mainMenuKeyboard(
+            this.isAdmin(user.telegramId),
+            this.miniAppUrl,
+          ),
         });
         if (this.adminTelegramId) {
           await this.sendTelegramNotification(
@@ -651,6 +661,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       const replies = {
         CONFIRMED: '✅ Заявка подтверждена, встреча создана в Google Calendar.',
         REJECTED: 'Заявка отклонена, резерв времени снят.',
+        BLOCKED: 'Заявка отклонена, пользователь заблокирован.',
         SLOT_UNAVAILABLE: 'Слот уже недоступен. Заявка закрыта, резерв снят.',
         CONFIRMATION_ERROR: 'Не удалось создать событие Google Calendar. Заявка помечена как ошибка подтверждения, резерв снят.',
         ALREADY_PROCESSED: 'Эта заявка уже обработана. Повторное действие не выполнено.',
@@ -803,9 +814,39 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
     await ctx.reply(
       '🏠 Главное меню\n\n👋 Добро пожаловать! Здесь можно записаться на встречу, посмотреть свои заявки и выбрать способ получения уведомлений.',
       {
-      reply_markup: mainMenuKeyboard(this.isAdmin(user.telegramId)),
+      reply_markup: mainMenuKeyboard(
+        this.isAdmin(user.telegramId),
+        this.miniAppUrl,
+      ),
       },
     );
+  }
+
+  private async configureMiniAppMenu(): Promise<void> {
+    if (!this.bot || !this.miniAppUrl) {
+      this.logger.logEvent('BotFlowService', 'telegram.mini_app.disabled');
+      return;
+    }
+    try {
+      await this.bot.api.setChatMenuButton({
+        menu_button: {
+          type: 'web_app',
+          text: 'Записаться',
+          web_app: { url: this.miniAppUrl },
+        },
+      });
+      this.logger.logEvent(
+        'BotFlowService',
+        'telegram.mini_app.menu_configured',
+        { mini_app_url: this.miniAppUrl },
+      );
+    } catch (error: unknown) {
+      this.logger.errorEvent(
+        'BotFlowService',
+        'telegram.mini_app.menu_configuration_failed',
+        { error_message: errorMessage(error) },
+      );
+    }
   }
 
   private async showAdminMenu(ctx: Context): Promise<void> {
@@ -1027,7 +1068,12 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       isReschedule
         ? 'Запрос на перенос принят. Старая встреча пока остаётся без изменений.'
         : 'Заявка принята. Решение ожидается в течение 48 часов.',
-      { reply_markup: mainMenuKeyboard(this.isAdmin(user.telegramId)) },
+      {
+        reply_markup: mainMenuKeyboard(
+          this.isAdmin(user.telegramId),
+          this.miniAppUrl,
+        ),
+      },
     );
   }
 
@@ -1094,9 +1140,16 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-function mainMenuKeyboard(isAdmin: boolean): InlineKeyboard {
-  const keyboard = new InlineKeyboard()
-    .text('📅 Записаться на встречу', 'booking:new')
+function mainMenuKeyboard(
+  isAdmin: boolean,
+  miniAppUrl: string | null,
+): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  if (miniAppUrl) {
+    keyboard.webApp('✨ Открыть приложение', miniAppUrl).row();
+  }
+  keyboard
+    .text('📅 Записаться в чате', 'booking:new')
     .row()
     .text('📋 Мои заявки', 'bookings:list')
     .text('🔔 Уведомления', 'notification:menu');

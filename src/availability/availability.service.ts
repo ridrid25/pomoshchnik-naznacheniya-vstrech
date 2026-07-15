@@ -39,6 +39,10 @@ export class AvailabilityService {
     private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
+  async getTimezone(): Promise<string> {
+    return (await this.loadSettings()).timezone;
+  }
+
   async getAvailableWeekOffsets(
     durationMinutes: number,
     now = new Date(),

@@ -11,6 +11,8 @@ RUN npm ci
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY prototype ./prototype
+COPY scripts/copy-mini-app-assets.mjs ./scripts/copy-mini-app-assets.mjs
 RUN npm run build \
     && npm prune --omit=dev --ignore-scripts \
     && npm cache clean --force

@@ -23,6 +23,7 @@ const requiredFiles = [
   'scripts/verify-production-pending-event.sh',
   'scripts/enable-calendar-review-production.sh',
   'scripts/verify-production-calendar-review.sh',
+  'scripts/verify-production-mini-app.sh',
 ];
 
 for (const file of requiredFiles) {
@@ -82,6 +83,9 @@ for (const key of [
   'GOOGLE_OAUTH_REDIRECT_URI',
   'PUBLIC_BASE_URL',
   'ADMIN_ACTION_SECRET',
+  'MINI_APP_SESSION_SECRET',
+  'MINI_APP_SESSION_TTL_SECONDS',
+  'MINI_APP_INIT_DATA_MAX_AGE_SECONDS',
 ]) {
   assert.ok(key in productionEnv, `Production env key missing: ${key}`);
 }
@@ -90,6 +94,24 @@ assert.equal(productionEnv.TELEGRAM_DEV_POLLING, 'false');
 assert.equal(productionEnv.DATABASE_URL, 'file:/app/data/app.db');
 assert.equal(productionEnv.TELEGRAM_BOT_TOKEN, '');
 assert.equal(productionEnv.TELEGRAM_WEBHOOK_SECRET, '');
+assert.equal(productionEnv.MINI_APP_SESSION_SECRET, '');
+
+const miniAppVerification = readFileSync(
+  'scripts/verify-production-mini-app.sh',
+  'utf8',
+);
+for (const marker of [
+  '/mini-app',
+  '${mini_app_url}/app.js',
+  '/api/mini-app/v1/me',
+  'getChatMenuButton',
+  'MINI_APP_STATUS=ready',
+]) {
+  assert.ok(
+    miniAppVerification.includes(marker),
+    `Mini App verification marker missing: ${marker}`,
+  );
+}
 
 for (const marker of [
   'docker compose --env-file .env.production config',
