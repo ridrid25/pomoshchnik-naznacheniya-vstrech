@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
@@ -21,6 +23,12 @@ const backupDirectory = resolve(dataDirectory, `stage2-backups-${runId}`);
 const expectedMigrationCount = readdirSync(resolve(root, 'prisma', 'migrations'), {
   withFileTypes: true,
 }).filter((entry) => entry.isDirectory()).length;
+const firstMigrationName = readdirSync(resolve(root, 'prisma', 'migrations'), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort()[0];
 
 mkdirSync(dataDirectory, { recursive: true });
 const env = {
@@ -32,6 +40,7 @@ const env = {
 try {
   runLocalBin('tsx', ['scripts/migrate-sqlite.ts'], env);
   assert.ok(existsSync(databasePath), 'Migration must create a SQLite file');
+  simulateLegacyWindowsChecksum(databasePath, firstMigrationName);
   runLocalBin('tsx', ['scripts/migrate-sqlite.ts'], env);
   runLocalBin('tsx', ['prisma/seed.ts'], env);
   runLocalBin('tsx', ['prisma/seed.ts'], env);
@@ -71,6 +80,7 @@ try {
       clean_database_created: true,
       migration_applied: true,
       migration_idempotent: true,
+      migration_line_endings_compatible: true,
       seed_applied: true,
       seed_idempotent: true,
       crud_smoke_passed: true,
@@ -82,6 +92,27 @@ try {
     rmSync(`${databasePath}${suffix}`, { force: true });
   }
   rmSync(backupDirectory, { force: true, recursive: true });
+}
+
+function simulateLegacyWindowsChecksum(targetDatabasePath, migrationName) {
+  const sql = readFileSync(
+    resolve(root, 'prisma', 'migrations', migrationName, 'migration.sql'),
+    'utf8',
+  );
+  const windowsSql = sql.replace(/\r\n?/gu, '\n').replace(/\n/gu, '\r\n');
+  const windowsChecksum = createHash('sha256')
+    .update(windowsSql)
+    .digest('hex');
+  const database = new Database(targetDatabasePath);
+  try {
+    database
+      .prepare(
+        'UPDATE "_prisma_migrations" SET checksum = ? WHERE migration_name = ?',
+      )
+      .run(windowsChecksum, migrationName);
+  } finally {
+    database.close();
+  }
 }
 
 function runLocalBin(name, args, childEnv) {

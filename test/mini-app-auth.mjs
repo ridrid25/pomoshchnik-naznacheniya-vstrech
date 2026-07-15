@@ -239,11 +239,18 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       { headers: { cookie: regularCookie } },
     ).then((response) => response.json());
     assert.ok(dates.dates.length > 0);
-    const slots = await fetch(
-      `${origin}/api/mini-app/v1/availability/slots?duration=30&date=${dates.dates[0]}`,
-      { headers: { cookie: regularCookie } },
-    ).then((response) => response.json());
-    assert.ok(slots.slots.length > 0);
+    let slots;
+    for (const date of dates.dates) {
+      const candidate = await fetch(
+        `${origin}/api/mini-app/v1/availability/slots?duration=30&date=${date}`,
+        { headers: { cookie: regularCookie } },
+      ).then((response) => response.json());
+      if (candidate.slots.length >= 3) {
+        slots = candidate;
+        break;
+      }
+    }
+    assert.ok(slots, 'A test date must provide at least three available slots');
     assert.equal(slots.slots[0].timezone, 'Europe/Moscow');
 
     const bookingInput = {

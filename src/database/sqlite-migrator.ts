@@ -47,7 +47,8 @@ export function applySqliteMigrations(
     for (const migrationName of migrationNames) {
       const sqlPath = resolve(migrationsPath, migrationName, 'migration.sql');
       const sql = readFileSync(sqlPath, 'utf8');
-      const checksum = createHash('sha256').update(sql).digest('hex');
+      const compatibleChecksums = migrationChecksums(sql);
+      const checksum = compatibleChecksums[0];
       const applied = database
         .prepare(
           'SELECT checksum, finished_at FROM "_prisma_migrations" WHERE migration_name = ?',
@@ -55,7 +56,10 @@ export function applySqliteMigrations(
         .get(migrationName) as AppliedMigration | undefined;
 
       if (applied) {
-        if (!applied.finished_at || applied.checksum !== checksum) {
+        if (
+          !applied.finished_at ||
+          !compatibleChecksums.includes(applied.checksum)
+        ) {
           throw new Error(
             `Migration integrity check failed for ${migrationName}`,
           );
@@ -96,4 +100,14 @@ export function applySqliteMigrations(
   } finally {
     database.close();
   }
+}
+
+function migrationChecksums(sql: string): string[] {
+  const normalized = sql.replace(/\r\n?/gu, '\n');
+  const variants = [normalized, normalized.replace(/\n/gu, '\r\n')];
+  return [...new Set(variants.map((value) => hashMigration(value)))];
+}
+
+function hashMigration(sql: string): string {
+  return createHash('sha256').update(sql).digest('hex');
 }
