@@ -89,6 +89,17 @@ export class GoogleCalendarService {
     return token?.accountEmail?.trim() || null;
   }
 
+  async getCalendarDayUrl(value: Date, timeZone: string): Promise<string> {
+    const date = dateInTimeZone(value, timeZone);
+    const [year, month, day] = date.split('-').map(Number);
+    const url = new URL(
+      `https://calendar.google.com/calendar/r/day/${year}/${month}/${day}`,
+    );
+    const accountEmail = await this.getAccountEmail();
+    if (accountEmail) url.searchParams.set('authuser', accountEmail);
+    return url.toString();
+  }
+
   createAuthorizationUrl(): string {
     const oauth = this.createOAuthClient();
     const state = randomBytes(32).toString('hex');
@@ -444,6 +455,18 @@ export class GoogleCalendarService {
       if (expiresAt < now) this.oauthStates.delete(state);
     }
   }
+}
+
+function dateInTimeZone(value: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
 function errorMessage(error: unknown): string {

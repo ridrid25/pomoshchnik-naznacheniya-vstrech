@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AvailabilityModule } from '../availability/availability.module';
 import { BookingsModule } from '../bookings/bookings.module';
+import { GoogleCalendarModule } from '../google-calendar/google-calendar.module';
 import { MiniAppAuthGuard } from './auth/mini-app-auth.guard';
 import { MiniAppAdminGuard } from './auth/mini-app-admin.guard';
 import { MiniAppAuthService } from './auth/mini-app-auth.service';
@@ -18,7 +19,7 @@ import { MiniAppSessionController } from './mini-app-session.controller';
 import { MiniAppUserBookingsController } from './mini-app-user-bookings.controller';
 
 @Module({
-  imports: [AvailabilityModule, BookingsModule],
+  imports: [AvailabilityModule, BookingsModule, GoogleCalendarModule],
   controllers: [
     MiniAppPageController,
     MiniAppSessionController,

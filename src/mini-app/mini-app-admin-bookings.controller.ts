@@ -19,6 +19,7 @@ import {
   type BookingDecisionResult,
 } from '../bookings/booking-decision.service';
 import { PrismaService } from '../database/prisma.service';
+import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import {
   BookingStatus,
   UserStatus,
@@ -47,6 +48,7 @@ export class MiniAppAdminBookingsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly decisions: BookingDecisionService,
+    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   @Get()
@@ -84,7 +86,7 @@ export class MiniAppAdminBookingsController {
       }),
     ]);
     return {
-      bookings: bookings.map(toAdminBookingContract),
+      bookings: bookings.map((booking) => toAdminBookingContract(booking)),
       summary: { pending, decidedToday },
     };
   }
@@ -93,7 +95,12 @@ export class MiniAppAdminBookingsController {
   async getOne(
     @Param('id') id: string,
   ): Promise<{ booking: MiniAppAdminBookingContract }> {
-    return { booking: toAdminBookingContract(await this.findBooking(id)) };
+    const booking = await this.findBooking(id);
+    const googleCalendarDayUrl = await this.googleCalendar.getCalendarDayUrl(
+      booking.startAt,
+      booking.timezone,
+    );
+    return { booking: toAdminBookingContract(booking, googleCalendarDayUrl) };
   }
 
   @Post(':id/:action')
@@ -166,6 +173,7 @@ function requireAdminTelegramId(request: MiniAppRequest): bigint {
 
 function toAdminBookingContract(
   booking: AdminBooking,
+  googleCalendarDayUrl: string | null = null,
 ): MiniAppAdminBookingContract {
   if (!booking.publicCode) throw new Error('Booking public code is missing');
   const endAt = new Date(
@@ -191,6 +199,7 @@ function toAdminBookingContract(
     originalBookingId: booking.originalBookingId,
     googleMeetUrl: booking.calendarEvent?.googleMeetUrl ?? null,
     calendarSyncStatus: booking.calendarEvent?.syncStatus ?? null,
+    googleCalendarDayUrl,
     createdAt: booking.createdAt.toISOString(),
     updatedAt: booking.updatedAt.toISOString(),
     user: {

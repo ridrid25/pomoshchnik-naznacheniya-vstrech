@@ -577,6 +577,7 @@ Frontend передает backend только сырой `Telegram.WebApp.initD
 
 ### M7. Админка MVP-2
 
+- Из карточки конкретной заявки открыть соответствующий день Google Calendar с серыми временными событиями и вернуться к решению без потери контекста.
 - Расписание, ограничения, OAuth health, blacklist, templates.
 - Telegram alert при проблемах Google Calendar.
 

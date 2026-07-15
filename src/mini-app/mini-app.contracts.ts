@@ -79,6 +79,7 @@ export interface MiniAppUserBookingContract {
 
 export interface MiniAppAdminBookingContract
   extends Omit<MiniAppUserBookingContract, 'canCancel' | 'canReschedule'> {
+  googleCalendarDayUrl: string | null;
   user: {
     id: string;
     telegramId: string;

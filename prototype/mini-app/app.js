@@ -697,6 +697,15 @@
     elements.adminDetailCard.innerHTML = `
       <div class="detail-status-row"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div><span>${booking.durationMinutes} мин</span></div>
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
+      ${booking.googleCalendarDayUrl ? `<section class="calendar-review-card">
+        <div class="calendar-review-head">
+          <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
+          <div><small>GOOGLE CALENDAR</small><strong>Проверьте серые заявки</strong></div>
+        </div>
+        <p>Откроем нужный день календаря. Сравните эту встречу с другими заявками на согласовании.</p>
+        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(booking.googleCalendarDayUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
+        <span class="calendar-review-note">После проверки вернитесь сюда — заявка останется открытой.</span>
+      </section>` : ''}
       <dl class="detail-list">
         <div><dt>Пользователь</dt><dd>${escapeHtml(booking.user.displayName)}</dd></div>
         <div><dt>Telegram</dt><dd>${escapeHtml(booking.user.username ? `@${booking.user.username}` : booking.user.telegramId)}</dd></div>
@@ -784,6 +793,7 @@
     const technicalError = booking.status === 'CONFIRMATION_ERROR';
     return {
       ...booking,
+      googleCalendarDayUrl: calendarDayUrl(booking.startAt, booking.timezone),
       user: {
         id: 'demo-user', telegramId: '900000003', username: 'ivan_petrov',
         displayName: 'Иван Петров', status: booking.demoUserStatus || 'ACTIVE',
@@ -798,6 +808,32 @@
   function adminMonth(startAt) {
     return new Intl.DateTimeFormat('ru-RU', { month: 'short' })
       .format(new Date(startAt)).replace('.', '').toUpperCase();
+  }
+
+  function calendarDayUrl(startAt, timeZone) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date(startAt));
+    const part = (type) => parts.find((item) => item.type === type)?.value || '';
+    return `https://calendar.google.com/calendar/r/day/${Number(part('year'))}/${Number(part('month'))}/${Number(part('day'))}`;
+  }
+
+  function openCalendarDay(value) {
+    try {
+      const url = new URL(value);
+      if (url.origin !== 'https://calendar.google.com' || !url.pathname.startsWith('/calendar/')) {
+        throw new Error('Некорректная ссылка календаря');
+      }
+      tg?.HapticFeedback?.selectionChanged();
+      if (tg?.openLink) {
+        tg.openLink(url.toString());
+        return;
+      }
+      const opened = window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      if (!opened) showToast('Разрешите открытие новой вкладки для Google Calendar');
+    } catch (error) {
+      showToast(error.message || 'Не удалось открыть Google Calendar');
+    }
   }
 
   async function saveNotificationPreferences() {
@@ -960,6 +996,7 @@
       return;
     }
     if (button.dataset.adminBookingId) { void openAdminBooking(button.dataset.adminBookingId); return; }
+    if (button.dataset.calendarUrl) { openCalendarDay(button.dataset.calendarUrl); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
         ? state.selectedAdminBooking

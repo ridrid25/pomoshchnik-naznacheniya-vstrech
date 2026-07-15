@@ -203,7 +203,12 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       { headers: { cookie } },
     );
     assert.equal(adminDetail.status, 200);
-    assert.equal((await adminDetail.json()).booking.user.telegramId, '900000003');
+    const adminDetailBody = await adminDetail.json();
+    assert.equal(adminDetailBody.booking.user.telegramId, '900000003');
+    assert.match(
+      adminDetailBody.booking.googleCalendarDayUrl,
+      /^https:\/\/calendar\.google\.com\/calendar\/r\/day\/\d{4}\/\d{1,2}\/\d{1,2}/u,
+    );
 
     const repeatedBooking = await createBooking(origin, origin, regularCookie, bookingInput);
     assert.equal(repeatedBooking.status, 200, await repeatedBooking.clone().text());

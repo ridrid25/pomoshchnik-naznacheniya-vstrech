@@ -42,6 +42,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /bookingList/u);
   assert.match(javascript, /dataset\.adminAction/u);
   assert.match(javascript, /admin\/bookings/u);
+  assert.match(javascript, /googleCalendarDayUrl/u);
+  assert.match(javascript, /dataset\.calendarUrl/u);
+  assert.match(javascript, /tg\?\.openLink/u);
+  assert.match(css, /calendar-review-card/u);
 });
 
 test('M2 prototype server returns all local assets', { timeout: 10_000 }, async () => {
