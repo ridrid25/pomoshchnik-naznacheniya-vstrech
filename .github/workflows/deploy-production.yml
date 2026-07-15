@@ -132,12 +132,12 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 20); do
             response=$(curl --fail --silent --show-error --max-time 10 "$PUBLIC_HEALTH_URL" || true)
-            if printf '%s' "$response" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+            if grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' <<<"$response"; then
               base_url=${PUBLIC_HEALTH_URL%/health}
               mini_app_html=$(curl --fail --silent --show-error --max-time 10 "${base_url}/mini-app")
               mini_app_js=$(curl --fail --silent --show-error --max-time 10 "${base_url}/mini-app/app.js")
-              printf '%s' "$mini_app_html" | grep -Fq 'id="app"'
-              printf '%s' "$mini_app_js" | grep -Fq 'idempotencyKey'
+              grep -Fq 'id="app"' <<<"$mini_app_html"
+              grep -Fq 'idempotencyKey' <<<"$mini_app_js"
               me_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 "${base_url}/api/mini-app/v1/me")
               [ "$me_status" = 401 ]
               printf 'Production health and Mini App are ready: %s\n' "$response"
