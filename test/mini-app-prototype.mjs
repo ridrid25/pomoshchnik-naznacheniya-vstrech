@@ -24,7 +24,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.doesNotMatch(html, /<img\b/iu);
   assert.doesNotMatch(html, /аватар|фотограф/iu);
   assert.match(html, /https:\/\/telegram\.org\/js\/telegram-web-app\.js\?62/iu);
-  assert.equal((html.match(/https?:\/\//giu) ?? []).length, 1);
+  assert.match(html, /https:\/\/t\.me\/Zapiscalendar_bot/iu);
+  assert.match(html, /id="telegramButton"/u);
+  assert.equal((html.match(/https?:\/\//giu) ?? []).length, 2);
+  assert.doesNotMatch(html, /demoButton|data-demo-only|Открыть демо/iu);
 
   assert.match(css, /html\[data-theme="dark"\]/u);
   assert.match(css, /@media \(max-width: 359px\)/u);
@@ -46,9 +49,9 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /dataset\.calendarUrl/u);
   assert.match(javascript, /tg\?\.openLink/u);
   assert.match(javascript, /renderCalendarReviewCard/u);
-  assert.match(javascript, /Демонстрационная заявка не создаёт событие/u);
-  assert.match(javascript, /соседнюю вкладку «Запись на встречу»/u);
-  assert.match(javascript, /Серое событие появится только после настоящей заявки/u);
+  assert.match(javascript, /соседней вкладке[^\n]+«Запись на встречу»/u);
+  assert.match(javascript, /бледную плашку «На согласовании»/u);
+  assert.doesNotMatch(javascript, /demo=1|enterDemo|demoBookings|createDemo|toDemo|state\.mode/iu);
   assert.match(javascript, /state\.selectedBooking\?\.id === button\.dataset\.adminId/u);
   assert.doesNotMatch(javascript, /<dt>Номер<\/dt>/u);
   assert.doesNotMatch(javascript, /successCode'\)\.textContent = booking\.publicCode/u);
@@ -57,7 +60,6 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /admin\/settings\/schedule/u);
   assert.match(javascript, /saveAdminSchedule/u);
   assert.match(css, /calendar-review-card/u);
-  assert.match(css, /calendar-review-note\.is-demo/u);
   assert.match(css, /integration-status-card/u);
   assert.match(html, /Календарь и расписание/u);
   assert.match(html, /Калининград · UTC\+2/u);

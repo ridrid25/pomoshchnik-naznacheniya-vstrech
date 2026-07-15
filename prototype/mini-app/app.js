@@ -7,7 +7,7 @@
   const tg = telegramWebApp?.initData ? telegramWebApp : null;
 
   const elements = {
-    boot: $('bootPanel'), bootTitle: $('bootTitle'), bootText: $('bootText'), demo: $('demoButton'),
+    boot: $('bootPanel'), bootTitle: $('bootTitle'), bootText: $('bootText'), telegram: $('telegramButton'),
     bottomNav: document.querySelector('.bottom-nav'), back: $('backButton'), theme: $('themeButton'),
     next: $('wizardNext'), previous: $('wizardBack'), form: $('bookingForm'), toast: $('toast'),
     modal: $('modalBackdrop'), modalClose: $('modalClose'), modalTitle: $('modalTitle'), modalText: $('modalText'), modalIcon: $('modalIcon'),
@@ -35,14 +35,14 @@
   };
 
   const state = {
-    mode: 'live', screen: 'home', history: [], step: 1, user: null,
+    screen: 'home', history: [], step: 1, user: null,
     format: 'Онлайн', duration: '30', weeks: [], weekIndex: 0,
     dates: [], date: null, slot: null, timezone: 'Europe/Moscow',
     idempotencyKey: newIdempotencyKey(), submitting: false,
     bookingScope: 'active', bookingCounts: { active: 0, archive: 0 },
     bookingsByScope: { active: [], archive: [] },
     selectedBooking: null, rescheduleOriginal: null, pendingCancelId: null,
-    notificationChannel: 'TELEGRAM', demoBookings: [],
+    notificationChannel: 'TELEGRAM',
     adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0 },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
   };
@@ -109,11 +109,6 @@
 
   async function bootstrap() {
     initializeTelegram();
-    elements.demo.addEventListener('click', () => location.assign('/mini-app?demo=1'));
-    if (new URLSearchParams(location.search).get('demo') === '1') {
-      enterDemo();
-      return;
-    }
     try {
       let session;
       try {
@@ -134,27 +129,9 @@
       elements.bootTitle.textContent = 'Откройте приложение в Telegram';
       elements.bootText.textContent = error.status === 403
         ? 'Адрес приложения не совпадает с настройками сервера.'
-        : 'Для безопасной записи нужна подтверждённая Telegram-сессия.';
-      elements.demo.classList.remove('is-hidden');
+        : 'Для записи откройте Mini App через Telegram-бота. Здесь используются только настоящие заявки.';
+      elements.telegram.classList.remove('is-hidden');
     }
-  }
-
-  function enterDemo() {
-    state.mode = 'demo';
-    state.user = {
-      role: 'ADMIN',
-      lastConfirmedEmail: 'ivan@example.com',
-      notificationChannel: 'TELEGRAM',
-    };
-    state.demoBookings = createDemoBookings();
-    elements.boot.classList.add('is-ready');
-    body.classList.remove('live-mode');
-    body.classList.add('admin-mode');
-    $('meetingTitle').value = 'Обсуждение проекта';
-    $('meetingComment').value = 'Покажу текущий прототип и план запуска.';
-    $('meetingEmail').value = 'ivan@example.com';
-    initializeNotificationPreferences();
-    void loadAdminQueue();
   }
 
   function showScreen(name, options = {}) {
@@ -232,13 +209,7 @@
     setAvailabilityState('Загружаем свободные даты…');
     state.slot = null;
     try {
-      if (state.mode === 'demo') {
-        const today = new Date();
-        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-        state.weeks = [0, 1, 2, 3].map((offset) => ({ offset, startDate: isoDate(addDays(start, offset * 7)), endDate: isoDate(addDays(start, offset * 7 + 6)) }));
-      } else {
-        state.weeks = (await api(`/availability/weeks?duration=${state.duration}`)).weeks;
-      }
+      state.weeks = (await api(`/availability/weeks?duration=${state.duration}`)).weeks;
       state.weekIndex = Math.min(state.weekIndex, Math.max(0, state.weeks.length - 1));
       await loadWeek();
     } catch (error) {
@@ -257,11 +228,7 @@
     }
     elements.weekLabel.textContent = `${formatShortDate(week.startDate)}–${formatShortDate(week.endDate)}`;
     setAvailabilityState('Загружаем даты…');
-    if (state.mode === 'demo') {
-      state.dates = [0, 1, 2, 3, 4].map((day) => isoDate(addDays(new Date(`${week.startDate}T12:00:00`), day)));
-    } else {
-      state.dates = (await api(`/availability/dates?duration=${state.duration}&weekOffset=${week.offset}`)).dates;
-    }
+    state.dates = (await api(`/availability/dates?duration=${state.duration}&weekOffset=${week.offset}`)).dates;
     state.date = state.dates.includes(state.date) ? state.date : state.dates[0] || null;
     renderDates(state.dates);
     if (state.date) await loadSlots();
@@ -287,14 +254,7 @@
     elements.morning.replaceChildren();
     elements.afternoon.replaceChildren();
     try {
-      let slots;
-      if (state.mode === 'demo') {
-        slots = ['09:00', '09:30', '10:30', '11:00', '14:00', '15:30', '17:00'].map((time) => ({
-          date: state.date, time, startAt: new Date(`${state.date}T${time}:00+03:00`).toISOString(), timezone: 'Europe/Moscow',
-        }));
-      } else {
-        slots = (await api(`/availability/slots?duration=${state.duration}&date=${state.date}`)).slots;
-      }
+      const slots = (await api(`/availability/slots?duration=${state.duration}&date=${state.date}`)).slots;
       state.slot = slots.find((slot) => slot.startAt === state.slot?.startAt) || slots[0] || null;
       if (state.slot) state.timezone = state.slot.timezone;
       renderSlots(slots);
@@ -390,13 +350,6 @@
 
   async function submitBooking() {
     if (state.submitting) return;
-    if (state.mode === 'demo') {
-      if (state.rescheduleOriginal) {
-        const demo = createDemoReschedule();
-        return showSuccess(demo, true);
-      }
-      return showSuccess({ publicCode: 'M-DEMO2026', startAt: state.slot.startAt, durationMinutes: Number(state.duration), meetingFormat: state.format === 'Онлайн' ? 'ONLINE' : 'IN_PERSON' }, false);
-    }
     state.submitting = true;
     elements.next.disabled = true;
     elements.next.setAttribute('aria-busy', 'true');
@@ -470,17 +423,12 @@
     elements.bookingsState.classList.remove('is-hidden');
     elements.bookingList.replaceChildren();
     try {
-      if (state.mode === 'demo') {
-        state.bookingsByScope.active = state.demoBookings.filter(isDemoActive);
-        state.bookingsByScope.archive = state.demoBookings.filter((booking) => !isDemoActive(booking));
-      } else {
-        const [active, archive] = await Promise.all([
-          api('/bookings?scope=active'),
-          api('/bookings?scope=archive'),
-        ]);
-        state.bookingsByScope.active = active.bookings;
-        state.bookingsByScope.archive = archive.bookings;
-      }
+      const [active, archive] = await Promise.all([
+        api('/bookings?scope=active'),
+        api('/bookings?scope=archive'),
+      ]);
+      state.bookingsByScope.active = active.bookings;
+      state.bookingsByScope.archive = archive.bookings;
       state.bookingCounts.active = state.bookingsByScope.active.length;
       state.bookingCounts.archive = state.bookingsByScope.archive.length;
       elements.activeCount.textContent = state.bookingCounts.active;
@@ -518,9 +466,7 @@
 
   async function openBooking(id) {
     try {
-      const cached = [...state.bookingsByScope.active, ...state.bookingsByScope.archive]
-        .find((booking) => booking.id === id);
-      const booking = state.mode === 'demo' ? cached : (await api(`/bookings/${id}`)).booking;
+      const booking = (await api(`/bookings/${id}`)).booking;
       if (!booking) throw new Error('Заявка не найдена');
       state.selectedBooking = booking;
       renderBookingDetail(booking);
@@ -535,8 +481,7 @@
     const format = booking.meetingFormat === 'ONLINE' ? 'Онлайн' : 'Личная';
     const canAdminDecide = state.user?.role === 'ADMIN'
       && ['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status);
-    const calendarUrl = booking.googleCalendarDayUrl
-      || (state.mode === 'demo' && canAdminDecide ? calendarDayUrl(booking.startAt, booking.timezone) : null);
+    const calendarUrl = booking.googleCalendarDayUrl;
     $('bookingDetailCode').textContent = booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Детали встречи';
     $('bookingDetailTitle').textContent = booking.title;
     $('bookingDetailFormat').textContent = format;
@@ -605,16 +550,7 @@
     elements.modalConfirm.disabled = true;
     elements.modalConfirm.textContent = 'Отменяем…';
     try {
-      if (state.mode === 'demo') {
-        const booking = state.demoBookings.find((item) => item.id === id);
-        if (booking) {
-          booking.status = 'CANCELLED_BY_USER';
-          booking.canCancel = false;
-          booking.canReschedule = false;
-        }
-      } else {
-        await api(`/bookings/${id}/cancel`, { method: 'POST' });
-      }
+      await api(`/bookings/${id}/cancel`, { method: 'POST' });
       closeModal();
       showScreen('bookings', { fromHistory: true });
       await loadBookings();
@@ -634,9 +570,7 @@
     elements.adminSettingsState.classList.remove('is-hidden');
     elements.adminSettingsContent.classList.add('is-hidden');
     try {
-      state.adminSettings = state.mode === 'demo'
-        ? demoAdminSettings()
-        : await api('/admin/settings');
+      state.adminSettings = await api('/admin/settings');
       renderAdminSettings();
     } catch (error) {
       elements.adminSettingsState.textContent = error.message || 'Не удалось загрузить настройки';
@@ -689,18 +623,6 @@
     select.value = String(value);
   }
 
-  function demoAdminSettings() {
-    return {
-      google: { configured: true, authorized: true, accountEmail: 'calendar@example.com', tokenExpiresAt: null },
-      schedule: {
-        timezone: 'Europe/Moscow', minimumLeadTimeMinutes: 1440,
-        bufferBeforeMinutes: 0, bufferAfterMinutes: 0, maxMeetingsPerDay: 4, bookingHorizonDays: 30,
-        workingPeriods: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, startMinute: 540, endMinute: 1080 })),
-      },
-      overview: { activeRestrictions: 1, blockedUsers: 0, templates: 8 },
-    };
-  }
-
   async function saveAdminSchedule(event) {
     event.preventDefault();
     const payload = {
@@ -714,8 +636,7 @@
     elements.saveScheduleSettings.disabled = true;
     elements.saveScheduleSettings.textContent = 'Сохраняем…';
     try {
-      if (state.mode === 'demo') Object.assign(state.adminSettings.schedule, payload);
-      else state.adminSettings = await api('/admin/settings/schedule', { method: 'PATCH', body: JSON.stringify(payload) });
+      state.adminSettings = await api('/admin/settings/schedule', { method: 'PATCH', body: JSON.stringify(payload) });
       renderAdminSettings();
       showToast('Правила записи сохранены');
       tg?.HapticFeedback?.notificationOccurred('success');
@@ -733,20 +654,9 @@
     elements.adminQueueState.classList.remove('is-hidden');
     elements.adminQueue.replaceChildren();
     try {
-      if (state.mode === 'demo') {
-        const all = state.demoBookings.map(toDemoAdminBooking);
-        state.adminBookings = all.filter((booking) => state.adminScope === 'pending'
-          ? ['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status)
-          : !['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status));
-        state.adminSummary = {
-          pending: all.filter((booking) => ['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status)).length,
-          decidedToday: all.filter((booking) => !['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status)).length,
-        };
-      } else {
-        const payload = await api(`/admin/bookings?scope=${state.adminScope}`);
-        state.adminBookings = payload.bookings;
-        state.adminSummary = payload.summary;
-      }
+      const payload = await api(`/admin/bookings?scope=${state.adminScope}`);
+      state.adminBookings = payload.bookings;
+      state.adminSummary = payload.summary;
       renderAdminQueue();
     } catch (error) {
       elements.adminQueueState.textContent = error.message || 'Не удалось загрузить очередь';
@@ -790,10 +700,7 @@
 
   async function openAdminBooking(id) {
     try {
-      const cached = state.adminBookings.find((booking) => booking.id === id);
-      const booking = state.mode === 'demo'
-        ? cached
-        : (await api(`/admin/bookings/${id}`)).booking;
+      const booking = (await api(`/admin/bookings/${id}`)).booking;
       if (!booking) throw new Error('Заявка не найдена');
       state.selectedAdminBooking = booking;
       renderAdminDetail(booking);
@@ -831,19 +738,14 @@
 
   function renderCalendarReviewCard(calendarUrl) {
     if (!calendarUrl) return '';
-    const isDemo = state.mode === 'demo';
     return `<section class="calendar-review-card">
         <div class="calendar-review-head">
           <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
-          <div><small>${isDemo ? 'ДЕМОНСТРАЦИЯ' : 'GOOGLE CALENDAR'}</small><strong>${isDemo ? 'Как будет работать календарь' : 'Сверьте занятость'}</strong></div>
+          <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
         </div>
-        <p>${isDemo
-          ? 'Можно открыть нужный день и посмотреть компоновку. Демонстрационная заявка не создаёт событие в вашем календаре.'
-          : 'В нужном времени найдите бледную плашку «На согласовании» с темой этой встречи.'}</p>
-        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}"><span>${isDemo ? 'Открыть пример дня' : 'Открыть этот день'}</span><span aria-hidden="true">↗</span></button>
-        <span class="calendar-review-note${isDemo ? ' is-demo' : ''}">${isDemo
-          ? 'Серое событие появится только после настоящей заявки.'
-          : 'Календарь откроется в соседней вкладке. Для возврата выберите вкладку «Запись на встречу».'}</span>
+        <p>В нужном времени найдите бледную плашку «На согласовании» с темой этой встречи.</p>
+        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
+        <span class="calendar-review-note">После проверки вернитесь в «Запись на встречу» — заявка и кнопки решения останутся открытыми.</span>
       </section>`;
   }
 
@@ -880,23 +782,10 @@
     elements.modalConfirm.disabled = true;
     elements.modalConfirm.textContent = 'Сохраняем…';
     try {
-      let result;
-      if (state.mode === 'demo') {
-        const booking = state.demoBookings.find((item) => item.id === pending.bookingId);
-        if (!booking) throw new Error('Заявка уже исчезла из очереди');
-        booking.status = pending.action === 'confirm' ? 'CONFIRMED' : 'REJECTED';
-        booking.rejectionReason = pending.action === 'confirm' ? null : reason || null;
-        booking.calendarSyncStatus = pending.action === 'confirm' ? 'SYNCED' : 'CANCELLED';
-        booking.canCancel = pending.action === 'confirm';
-        booking.canReschedule = pending.action === 'confirm';
-        booking.demoUserStatus = pending.action === 'block' ? 'BANNED' : 'ACTIVE';
-        result = { decision: { outcome: pending.action === 'block' ? 'BLOCKED' : pending.action === 'confirm' ? 'CONFIRMED' : 'REJECTED' }, booking: toDemoAdminBooking(booking) };
-      } else {
-        result = await api(`/admin/bookings/${pending.bookingId}/${pending.action}`, {
-          method: 'POST',
-          body: JSON.stringify({ reason: reason || null }),
-        });
-      }
+      const result = await api(`/admin/bookings/${pending.bookingId}/${pending.action}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason || null }),
+      });
       const messages = {
         CONFIRMED: ['Встреча подтверждена', 'В Google Calendar создано одно событие, пользователь получил уведомление.', '✓'],
         REJECTED: ['Заявка отклонена', 'Резерв времени снят, пользователь получил уведомление.', '×'],
@@ -919,34 +808,9 @@
     }
   }
 
-  function toDemoAdminBooking(booking) {
-    const pending = booking.status === 'PENDING_APPROVAL';
-    const technicalError = booking.status === 'CONFIRMATION_ERROR';
-    return {
-      ...booking,
-      googleCalendarDayUrl: calendarDayUrl(booking.startAt, booking.timezone),
-      user: {
-        id: 'demo-user', telegramId: '900000003', username: 'ivan_petrov',
-        displayName: 'Иван Петров', status: booking.demoUserStatus || 'ACTIVE',
-      },
-      queueState: technicalError ? 'TECHNICAL_ERROR' : pending ? 'REQUIRES_DECISION' : 'PROCESSED',
-      canConfirm: pending,
-      canReject: pending || technicalError,
-      canBlock: (pending || technicalError) && booking.demoUserStatus !== 'BANNED',
-    };
-  }
-
   function adminMonth(startAt) {
     return new Intl.DateTimeFormat('ru-RU', { month: 'short' })
       .format(new Date(startAt)).replace('.', '').toUpperCase();
-  }
-
-  function calendarDayUrl(startAt, timeZone) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date(startAt));
-    const part = (type) => parts.find((item) => item.type === type)?.value || '';
-    return `https://calendar.google.com/calendar/r/day/${Number(part('year'))}/${Number(part('month'))}/${Number(part('day'))}`;
   }
 
   function openCalendarDay(value) {
@@ -958,8 +822,8 @@
       tg?.HapticFeedback?.selectionChanged();
       showModal(
         'Как вернуться к заявке',
-        state.mode === 'demo'
-          ? 'Это демонстрация, поэтому события в календаре не будет. Вернитесь на соседнюю вкладку «Запись на встречу» — карточка останется открытой.'
+        tg
+          ? 'После проверки закройте Google Calendar или вернитесь в Telegram. Эта заявка и кнопки решения останутся открытыми.'
           : 'Календарь открылся в соседней вкладке. После проверки выберите вкладку «Запись на встречу» — эта заявка и кнопки решения останутся открытыми.',
         '↩',
       );
@@ -980,16 +844,11 @@
     }
     elements.saveNotifications.disabled = true;
     try {
-      if (state.mode === 'demo') {
-        state.user.notificationChannel = state.notificationChannel;
-        if (email) state.user.lastConfirmedEmail = email;
-      } else {
-        const session = await api('/me/notifications', {
-          method: 'PATCH',
-          body: JSON.stringify({ channel: state.notificationChannel, email: email || null }),
-        });
-        state.user = session.user;
-      }
+      const session = await api('/me/notifications', {
+        method: 'PATCH',
+        body: JSON.stringify({ channel: state.notificationChannel, email: email || null }),
+      });
+      state.user = session.user;
       initializeNotificationPreferences();
       showToast(state.notificationChannel === 'EMAIL' ? 'Ответы придут на email' : 'Ответы придут в Telegram');
       tg?.HapticFeedback?.notificationOccurred('success');
@@ -998,50 +857,6 @@
     } finally {
       elements.saveNotifications.disabled = false;
     }
-  }
-
-  function createDemoBookings() {
-    const base = addDays(new Date(), 4);
-    const make = (values) => ({
-      id: values.id, publicCode: values.publicCode, type: values.type || 'NEW', source: 'MINI_APP',
-      meetingFormat: values.meetingFormat || 'ONLINE', durationMinutes: values.durationMinutes || 30,
-      startAt: values.startAt, endAt: new Date(new Date(values.startAt).getTime() + (values.durationMinutes || 30) * 60_000).toISOString(),
-      timezone: 'Europe/Moscow', title: values.title, comment: values.comment || null,
-      email: 'ivan@example.com', status: values.status, rejectionReason: null, originalBookingId: null,
-      googleMeetUrl: values.status === 'CONFIRMED' && values.meetingFormat !== 'IN_PERSON' ? 'https://meet.google.com/demo-room' : null,
-      calendarSyncStatus: values.status === 'CONFIRMED' ? 'SYNCED' : 'PENDING',
-      canCancel: ['PENDING_APPROVAL', 'CONFIRMED'].includes(values.status),
-      canReschedule: values.status === 'CONFIRMED', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    });
-    return [
-      make({ id: 'demo-pending', publicCode: 'M-7A3F21C9D4', title: 'Обсуждение проекта', comment: 'Покажу текущий прототип и план запуска.', status: 'PENDING_APPROVAL', startAt: atLocalTime(base, '10:30') }),
-      make({ id: 'demo-confirmed', publicCode: 'M-9B18E642A0', title: 'Рабочая встреча', status: 'CONFIRMED', meetingFormat: 'IN_PERSON', durationMinutes: 45, startAt: atLocalTime(addDays(base, 3), '15:30') }),
-      make({ id: 'demo-archive', publicCode: 'M-4C6F209BD1', title: 'Знакомство с проектом', status: 'REJECTED', startAt: atLocalTime(addDays(base, -10), '12:00') }),
-    ];
-  }
-
-  function createDemoReschedule() {
-    const original = state.rescheduleOriginal;
-    const booking = {
-      ...original,
-      id: `demo-reschedule-${Date.now()}`,
-      publicCode: 'M-R3SCH2026',
-      type: 'RESCHEDULE',
-      status: 'PENDING_APPROVAL',
-      startAt: state.slot.startAt,
-      endAt: new Date(new Date(state.slot.startAt).getTime() + original.durationMinutes * 60_000).toISOString(),
-      originalBookingId: original.id,
-      googleMeetUrl: null,
-      calendarSyncStatus: 'PENDING',
-      canReschedule: false,
-    };
-    state.demoBookings.unshift(booking);
-    return booking;
-  }
-
-  function isDemoActive(booking) {
-    if (['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status)) return true;
-    return booking.status === 'CONFIRMED' && new Date(booking.endAt) > new Date();
   }
 
   function bookingStatus(booking) {
@@ -1063,10 +878,6 @@
       timeZone: booking.timezone,
       weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
     }).format(date).replace(',', ' ·');
-  }
-
-  function atLocalTime(date, time) {
-    return new Date(`${isoDate(date)}T${time}:00+03:00`).toISOString();
   }
 
   function escapeHtml(value) {
@@ -1111,8 +922,8 @@
       state.rescheduleOriginal = null;
       state.history = ['home']; state.idempotencyKey = newIdempotencyKey();
       state.weekIndex = 0; state.date = null; state.slot = null;
-      $('meetingTitle').value = state.mode === 'demo' ? 'Обсуждение проекта' : '';
-      $('meetingComment').value = state.mode === 'demo' ? 'Покажу текущий прототип и план запуска.' : '';
+      $('meetingTitle').value = '';
+      $('meetingComment').value = '';
       setWizardStep(1); showScreen('wizard', { fromHistory: true }); return;
     }
     if (button.closest('[data-choice-group]')) { selectChoice(button); return; }
