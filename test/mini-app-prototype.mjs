@@ -24,7 +24,8 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.doesNotMatch(html, /<img\b/iu);
   assert.doesNotMatch(html, /аватар|фотограф/iu);
   assert.match(html, /https:\/\/telegram\.org\/js\/telegram-web-app\.js\?62/iu);
-  assert.match(html, /https:\/\/t\.me\/Zapiscalendar_bot/iu);
+  assert.match(html, /https:\/\/t\.me\/Zapiscalender_bot/iu);
+  assert.doesNotMatch(html, /https:\/\/t\.me\/Zapiscalendar_bot/iu);
   assert.match(html, /id="telegramButton"/u);
   assert.equal((html.match(/https?:\/\//giu) ?? []).length, 2);
   assert.doesNotMatch(html, /demoButton|data-demo-only|Открыть демо/iu);

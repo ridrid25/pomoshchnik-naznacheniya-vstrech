@@ -20,6 +20,7 @@ const requiredFiles = [
   'scripts/set-production-calendar-account.sh',
   'scripts/verify-production-account-pin.sh',
   'scripts/inspect-production-pending.sh',
+  'scripts/inspect-production-pilot-metrics.sh',
   'scripts/verify-production-pending-event.sh',
   'scripts/enable-calendar-review-production.sh',
   'scripts/verify-production-calendar-review.sh',
@@ -36,6 +37,10 @@ const caddy = readFileSync('Caddyfile', 'utf8');
 const dockerignore = readFileSync('.dockerignore', 'utf8');
 const envExample = readFileSync('.env.production.example', 'utf8');
 const deploymentGuide = readFileSync('docs/DEPLOY_VPS.md', 'utf8');
+const pilotMetrics = readFileSync(
+  'scripts/inspect-production-pilot-metrics.sh',
+  'utf8',
+);
 
 for (const marker of [
   'node:24.18.0-bookworm-slim',
@@ -105,6 +110,9 @@ for (const marker of [
   '${mini_app_url}/app.js',
   '/api/mini-app/v1/me',
   'getChatMenuButton',
+  'getMe',
+  'bot_username',
+  'https://t.me/${bot_username}',
   'ADMIN_ACTION_SECRET',
   'MINI_APP_STATUS=ready',
 ]) {
@@ -113,6 +121,24 @@ for (const marker of [
     `Mini App verification marker missing: ${marker}`,
   );
 }
+
+for (const marker of [
+  'readonly: true',
+  'source = ?',
+  'mini_app_bookings',
+  'unique_mini_app_users',
+  'pending_calendar_markers',
+]) {
+  assert.ok(
+    pilotMetrics.includes(marker),
+    `Pilot metrics marker missing: ${marker}`,
+  );
+}
+assert.doesNotMatch(
+  pilotMetrics,
+  /telegramUsername|telegramDisplayName|telegramId|emailSnapshot|publicCode|title|comment/u,
+  'Pilot metrics must not read personally identifying booking fields',
+);
 
 for (const marker of [
   'docker compose --env-file .env.production config',
