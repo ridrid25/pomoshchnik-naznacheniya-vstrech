@@ -136,6 +136,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
         method: 'PATCH',
         headers: { cookie, origin, 'content-type': 'application/json' },
         body: JSON.stringify({
+          timezone: 'Asia/Yekaterinburg',
           minimumLeadTimeMinutes: 180,
           bookingHorizonDays: 14,
           maxMeetingsPerDay: 5,
@@ -146,6 +147,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     );
     assert.equal(updatedAdminSettings.status, 200, await updatedAdminSettings.clone().text());
     const updatedAdminSettingsBody = await updatedAdminSettings.json();
+    assert.equal(updatedAdminSettingsBody.schedule.timezone, 'Asia/Yekaterinburg');
     assert.equal(updatedAdminSettingsBody.schedule.minimumLeadTimeMinutes, 180);
     assert.equal(updatedAdminSettingsBody.schedule.bufferAfterMinutes, 30);
 
@@ -155,7 +157,8 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
         method: 'PATCH',
         headers: { cookie, origin, 'content-type': 'application/json' },
         body: JSON.stringify({
-          minimumLeadTimeMinutes: -1,
+          timezone: 'America/New_York',
+          minimumLeadTimeMinutes: 180,
           bookingHorizonDays: 14,
           maxMeetingsPerDay: 5,
           bufferBeforeMinutes: 15,
@@ -171,6 +174,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
         method: 'PATCH',
         headers: { cookie, origin, 'content-type': 'application/json' },
         body: JSON.stringify({
+          timezone: 'Europe/Moscow',
           minimumLeadTimeMinutes: 1440,
           bookingHorizonDays: 30,
           maxMeetingsPerDay: 4,

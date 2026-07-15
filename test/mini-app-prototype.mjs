@@ -50,6 +50,9 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(css, /calendar-review-card/u);
   assert.match(css, /integration-status-card/u);
   assert.match(html, /Календарь и расписание/u);
+  assert.match(html, /Калининград · UTC\+2/u);
+  assert.match(html, /Камчатка · UTC\+12/u);
+  assert.match(javascript, /timezone: elements\.scheduleTimezone\.value/u);
   assert.doesNotMatch(javascript, /серые заявки/iu);
 });
 

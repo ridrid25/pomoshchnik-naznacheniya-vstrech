@@ -15,12 +15,27 @@ import { MiniAppOriginGuard } from './auth/mini-app-origin.guard';
 import type { MiniAppAdminSettingsContract } from './mini-app.contracts';
 
 interface ScheduleUpdateBody {
+  timezone?: unknown;
   minimumLeadTimeMinutes?: unknown;
   bufferBeforeMinutes?: unknown;
   bufferAfterMinutes?: unknown;
   maxMeetingsPerDay?: unknown;
   bookingHorizonDays?: unknown;
 }
+
+const RUSSIAN_TIMEZONES = new Set([
+  'Europe/Kaliningrad',
+  'Europe/Moscow',
+  'Europe/Samara',
+  'Asia/Yekaterinburg',
+  'Asia/Omsk',
+  'Asia/Krasnoyarsk',
+  'Asia/Irkutsk',
+  'Asia/Yakutsk',
+  'Asia/Vladivostok',
+  'Asia/Magadan',
+  'Asia/Kamchatka',
+]);
 
 @Controller('api/mini-app/v1/admin/settings')
 @UseGuards(MiniAppAuthGuard, MiniAppAdminGuard)
@@ -41,6 +56,7 @@ export class MiniAppAdminSettingsController {
     @Body() body: ScheduleUpdateBody,
   ): Promise<MiniAppAdminSettingsContract> {
     const data = {
+      timezone: parseTimezone(body.timezone),
       minimumLeadTimeMinutes: parseInteger(
         body.minimumLeadTimeMinutes,
         'minimumLeadTimeMinutes',
@@ -117,6 +133,13 @@ export class MiniAppAdminSettingsController {
       overview: { activeRestrictions, blockedUsers, templates },
     };
   }
+}
+
+function parseTimezone(value: unknown): string {
+  if (typeof value !== 'string' || !RUSSIAN_TIMEZONES.has(value)) {
+    throw new BadRequestException('timezone must be a supported Russian time zone');
+  }
+  return value;
 }
 
 function parseInteger(

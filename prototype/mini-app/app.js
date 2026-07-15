@@ -645,7 +645,7 @@
       <p>${connected ? 'Свободные окна, заявки и подтверждённые встречи синхронизируются автоматически.' : 'Проверьте OAuth-настройки в Telegram-разделе администратора.'}</p>
       <div class="integration-account"><span>Аккаунт</span><strong>${escapeHtml(google.accountEmail || 'Не определён')}</strong></div>`;
     const schedule = settings.schedule;
-    elements.scheduleTimezone.textContent = timezoneLabel(schedule.timezone);
+    elements.scheduleTimezone.value = schedule.timezone;
     elements.workingPeriods.innerHTML = renderWorkingPeriods(schedule.workingPeriods);
     setSelectValue(elements.minimumLeadTimeMinutes, schedule.minimumLeadTimeMinutes, `${schedule.minimumLeadTimeMinutes} мин`);
     setSelectValue(elements.bookingHorizonDays, schedule.bookingHorizonDays, `${schedule.bookingHorizonDays} дней`);
@@ -695,6 +695,7 @@
   async function saveAdminSchedule(event) {
     event.preventDefault();
     const payload = {
+      timezone: elements.scheduleTimezone.value,
       minimumLeadTimeMinutes: Number(elements.minimumLeadTimeMinutes.value),
       bookingHorizonDays: Number(elements.bookingHorizonDays.value),
       maxMeetingsPerDay: Number(elements.maxMeetingsPerDay.value),
@@ -1154,7 +1155,14 @@
   function addDays(date, days) { const copy = new Date(date); copy.setDate(copy.getDate() + days); return copy; }
   function isoDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
   function plural(value, one, few, many) { const n = Math.abs(value) % 100; const n1 = n % 10; return n > 10 && n < 20 ? many : n1 > 1 && n1 < 5 ? few : n1 === 1 ? one : many; }
-  function timezoneLabel(timezone) { return timezone === 'Europe/Moscow' ? 'Москва' : timezone; }
+  function timezoneLabel(timezone) {
+    return ({
+      'Europe/Kaliningrad': 'Калининград', 'Europe/Moscow': 'Москва', 'Europe/Samara': 'Самара',
+      'Asia/Yekaterinburg': 'Екатеринбург', 'Asia/Omsk': 'Омск', 'Asia/Krasnoyarsk': 'Красноярск',
+      'Asia/Irkutsk': 'Иркутск', 'Asia/Yakutsk': 'Якутск', 'Asia/Vladivostok': 'Владивосток',
+      'Asia/Magadan': 'Магадан', 'Asia/Kamchatka': 'Камчатка',
+    })[timezone] || timezone;
+  }
   function newIdempotencyKey() { return `mini-app:${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`; }
 
   screens.forEach((screen) => screen.setAttribute('aria-hidden', String(screen.dataset.screen !== state.screen)));
