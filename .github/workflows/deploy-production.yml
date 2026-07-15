@@ -109,6 +109,7 @@ jobs:
             tsconfig.json \
             tsconfig.build.json \
             prisma \
+            prototype \
             scripts \
             src
           echo "RELEASE_ARCHIVE=$archive" >> "$GITHUB_ENV"
@@ -132,7 +133,14 @@ jobs:
           for attempt in $(seq 1 20); do
             response=$(curl --fail --silent --show-error --max-time 10 "$PUBLIC_HEALTH_URL" || true)
             if printf '%s' "$response" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
-              printf 'Production is healthy: %s\n' "$response"
+              base_url=${PUBLIC_HEALTH_URL%/health}
+              mini_app_html=$(curl --fail --silent --show-error --max-time 10 "${base_url}/mini-app")
+              mini_app_js=$(curl --fail --silent --show-error --max-time 10 "${base_url}/mini-app/app.js")
+              printf '%s' "$mini_app_html" | grep -Fq 'Запись на встречу'
+              printf '%s' "$mini_app_js" | grep -Fq 'idempotencyKey'
+              me_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 "${base_url}/api/mini-app/v1/me")
+              [ "$me_status" = 401 ]
+              printf 'Production health and Mini App are ready: %s\n' "$response"
               exit 0
             fi
             echo "Health check attempt ${attempt}/20 is not ready"
