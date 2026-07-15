@@ -131,13 +131,24 @@ async function main(): Promise<void> {
       status: string;
       transparency: string;
       colorId: string;
+      start: { dateTime: string; timeZone: string };
+      end: { dateTime: string; timeZone: string };
       attendees?: unknown;
       conferenceData?: unknown;
     };
     assert.ok(pendingBody.summary.startsWith('⏳ На согласовании'));
+    assert.ok(pendingBody.summary.includes('Stage 5 pending'));
     assert.equal(pendingBody.status, 'tentative');
     assert.equal(pendingBody.transparency, 'transparent');
     assert.equal(pendingBody.colorId, '8');
+    assert.deepEqual(pendingBody.start, {
+      dateTime: '2030-01-15T08:00:00.000Z',
+      timeZone: 'Europe/Moscow',
+    });
+    assert.deepEqual(pendingBody.end, {
+      dateTime: '2030-01-15T08:30:00.000Z',
+      timeZone: 'Europe/Moscow',
+    });
     assert.equal(pendingBody.attendees, undefined);
     assert.equal(pendingBody.conferenceData, undefined);
 

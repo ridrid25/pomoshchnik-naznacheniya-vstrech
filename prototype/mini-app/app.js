@@ -831,14 +831,19 @@
 
   function renderCalendarReviewCard(calendarUrl) {
     if (!calendarUrl) return '';
+    const isDemo = state.mode === 'demo';
     return `<section class="calendar-review-card">
         <div class="calendar-review-head">
           <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
-          <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
+          <div><small>${isDemo ? 'ДЕМОНСТРАЦИЯ' : 'GOOGLE CALENDAR'}</small><strong>${isDemo ? 'Как будет работать календарь' : 'Сверьте занятость'}</strong></div>
         </div>
-        <p>Откроем нужный день календаря. Сравните эту встречу с другими заявками на согласовании.</p>
-        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
-        <span class="calendar-review-note">После проверки вернитесь сюда — заявка останется открытой.</span>
+        <p>${isDemo
+          ? 'Можно открыть нужный день и посмотреть компоновку. Демонстрационная заявка не создаёт событие в вашем календаре.'
+          : 'В нужном времени найдите бледную плашку «На согласовании» с темой этой встречи.'}</p>
+        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}"><span>${isDemo ? 'Открыть пример дня' : 'Открыть этот день'}</span><span aria-hidden="true">↗</span></button>
+        <span class="calendar-review-note${isDemo ? ' is-demo' : ''}">${isDemo
+          ? 'Серое событие появится только после настоящей заявки.'
+          : 'Календарь откроется в соседней вкладке. Для возврата выберите вкладку «Запись на встречу».'}</span>
       </section>`;
   }
 
@@ -951,12 +956,18 @@
         throw new Error('Некорректная ссылка календаря');
       }
       tg?.HapticFeedback?.selectionChanged();
+      showModal(
+        'Как вернуться к заявке',
+        state.mode === 'demo'
+          ? 'Это демонстрация, поэтому события в календаре не будет. Вернитесь на соседнюю вкладку «Запись на встречу» — карточка останется открытой.'
+          : 'Календарь открылся в соседней вкладке. После проверки выберите вкладку «Запись на встречу» — эта заявка и кнопки решения останутся открытыми.',
+        '↩',
+      );
       if (tg?.openLink) {
         tg.openLink(url.toString());
         return;
       }
-      const opened = window.open(url.toString(), '_blank', 'noopener,noreferrer');
-      if (!opened) showToast('Разрешите открытие новой вкладки для Google Calendar');
+      window.open(url.toString(), '_blank', 'noopener,noreferrer');
     } catch (error) {
       showToast(error.message || 'Не удалось открыть Google Calendar');
     }

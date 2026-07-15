@@ -46,6 +46,9 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /dataset\.calendarUrl/u);
   assert.match(javascript, /tg\?\.openLink/u);
   assert.match(javascript, /renderCalendarReviewCard/u);
+  assert.match(javascript, /Демонстрационная заявка не создаёт событие/u);
+  assert.match(javascript, /соседнюю вкладку «Запись на встречу»/u);
+  assert.match(javascript, /Серое событие появится только после настоящей заявки/u);
   assert.match(javascript, /state\.selectedBooking\?\.id === button\.dataset\.adminId/u);
   assert.doesNotMatch(javascript, /<dt>Номер<\/dt>/u);
   assert.doesNotMatch(javascript, /successCode'\)\.textContent = booking\.publicCode/u);
@@ -54,6 +57,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /admin\/settings\/schedule/u);
   assert.match(javascript, /saveAdminSchedule/u);
   assert.match(css, /calendar-review-card/u);
+  assert.match(css, /calendar-review-note\.is-demo/u);
   assert.match(css, /integration-status-card/u);
   assert.match(html, /Календарь и расписание/u);
   assert.match(html, /Калининград · UTC\+2/u);
