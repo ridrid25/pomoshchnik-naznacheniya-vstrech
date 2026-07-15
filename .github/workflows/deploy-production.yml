@@ -136,7 +136,7 @@ jobs:
               base_url=${PUBLIC_HEALTH_URL%/health}
               mini_app_html=$(curl --fail --silent --show-error --max-time 10 "${base_url}/mini-app")
               mini_app_js=$(curl --fail --silent --show-error --max-time 10 "${base_url}/mini-app/app.js")
-              printf '%s' "$mini_app_html" | grep -Fq 'Запись на встречу'
+              printf '%s' "$mini_app_html" | grep -Fq 'id="app"'
               printf '%s' "$mini_app_js" | grep -Fq 'idempotencyKey'
               me_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 "${base_url}/api/mini-app/v1/me")
               [ "$me_status" = 401 ]
