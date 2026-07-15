@@ -70,6 +70,7 @@ export interface MiniAppUserBookingContract {
   rejectionReason: string | null;
   originalBookingId: string | null;
   googleMeetUrl: string | null;
+  googleCalendarDayUrl: string | null;
   calendarSyncStatus: 'PENDING' | 'SYNCED' | 'CANCELLED' | 'ERROR' | null;
   canCancel: boolean;
   canReschedule: boolean;
@@ -79,7 +80,6 @@ export interface MiniAppUserBookingContract {
 
 export interface MiniAppAdminBookingContract
   extends Omit<MiniAppUserBookingContract, 'canCancel' | 'canReschedule'> {
-  googleCalendarDayUrl: string | null;
   user: {
     id: string;
     telegramId: string;

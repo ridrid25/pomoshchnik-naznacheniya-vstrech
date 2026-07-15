@@ -45,6 +45,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /googleCalendarDayUrl/u);
   assert.match(javascript, /dataset\.calendarUrl/u);
   assert.match(javascript, /tg\?\.openLink/u);
+  assert.match(javascript, /renderCalendarReviewCard/u);
+  assert.match(javascript, /state\.selectedBooking\?\.id === button\.dataset\.adminId/u);
+  assert.doesNotMatch(javascript, /<dt>Номер<\/dt>/u);
+  assert.doesNotMatch(javascript, /successCode'\)\.textContent = booking\.publicCode/u);
+  assert.doesNotMatch(javascript, /request-code[^\n]+booking\.publicCode/u);
+  assert.doesNotMatch(javascript, /adminDetailCode'\)\.textContent = `Заявка \$\{booking\.publicCode\}`/u);
   assert.match(javascript, /admin\/settings\/schedule/u);
   assert.match(javascript, /saveAdminSchedule/u);
   assert.match(css, /calendar-review-card/u);

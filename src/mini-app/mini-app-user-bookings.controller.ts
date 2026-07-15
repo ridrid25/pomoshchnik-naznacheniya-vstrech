@@ -28,6 +28,7 @@ import {
 } from '../generated/prisma/client';
 import { NotificationService } from '../notifications/notification.service';
 import { AvailabilityService } from '../availability/availability.service';
+import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import { MiniAppAuthGuard } from './auth/mini-app-auth.guard';
 import type { MiniAppRequest } from './auth/mini-app-auth.types';
 import { MiniAppOriginGuard } from './auth/mini-app-origin.guard';
@@ -51,6 +52,7 @@ export class MiniAppUserBookingsController {
     private readonly bookings: BookingService,
     private readonly availability: AvailabilityService,
     private readonly notifications: NotificationService,
+    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   @Get()
@@ -80,7 +82,19 @@ export class MiniAppUserBookingsController {
     @Param('id') id: string,
   ): Promise<{ booking: MiniAppUserBookingContract }> {
     const booking = await this.findOwned(id, requireUserId(request));
-    return { booking: toUserBookingContract(booking, new Date()) };
+    const googleCalendarDayUrl = request.miniAppAuth?.role === 'ADMIN'
+      ? await this.googleCalendar.getCalendarDayUrl(
+          booking.startAt,
+          booking.timezone,
+        )
+      : null;
+    return {
+      booking: toUserBookingContract(
+        booking,
+        new Date(),
+        googleCalendarDayUrl,
+      ),
+    };
   }
 
   @Post(':id/cancel')
@@ -263,6 +277,7 @@ function isActive(booking: BookingWithCalendar, now: Date): boolean {
 function toUserBookingContract(
   booking: BookingWithCalendar,
   now: Date,
+  googleCalendarDayUrl: string | null = null,
 ): MiniAppUserBookingContract {
   if (!booking.publicCode) throw new Error('Booking public code is missing');
   const endAt = new Date(
@@ -286,6 +301,7 @@ function toUserBookingContract(
     rejectionReason: booking.rejectionReason,
     originalBookingId: booking.originalBookingId,
     googleMeetUrl: booking.calendarEvent?.googleMeetUrl ?? null,
+    googleCalendarDayUrl,
     calendarSyncStatus: booking.calendarEvent?.syncStatus ?? null,
     canCancel:
       booking.status === BookingStatus.PENDING_APPROVAL ||

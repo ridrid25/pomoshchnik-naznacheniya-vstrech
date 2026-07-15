@@ -441,7 +441,7 @@
   }
 
   function showSuccess(booking, rescheduled = false) {
-    $('successCode').textContent = booking.publicCode;
+    $('successCode').textContent = rescheduled ? 'Перенос встречи' : 'Заявка отправлена';
     $('successTitle').textContent = rescheduled ? 'Перенос отправлен' : 'Отправлено на согласование';
     $('successText').textContent = rescheduled
       ? 'Старая встреча остаётся действующей, пока администратор не подтвердит новое время.'
@@ -511,7 +511,7 @@
     return `<article class="booking-card${state.bookingScope === 'archive' ? ' is-muted' : ''}">
       <div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div>
       <div class="booking-card-head"><div>${typeLabel}<p>${escapeHtml(formatBookingMoment(booking))}</p><h3>${escapeHtml(booking.title)}</h3></div><span class="format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}">${format}</span></div>
-      <div class="booking-detail-row"><span>${booking.durationMinutes} минут</span><i></i><span>${escapeHtml(booking.publicCode)}</span></div>
+      <div class="booking-detail-row"><span>${booking.durationMinutes} минут</span><i></i><span>${escapeHtml(timezoneLabel(booking.timezone))}</span></div>
       <button class="outline-button full-width" type="button" data-booking-id="${escapeHtml(booking.id)}">Подробнее</button>
     </article>`;
   }
@@ -533,7 +533,11 @@
   function renderBookingDetail(booking) {
     const status = bookingStatus(booking);
     const format = booking.meetingFormat === 'ONLINE' ? 'Онлайн' : 'Личная';
-    $('bookingDetailCode').textContent = `${booking.type === 'RESCHEDULE' ? 'Перенос' : 'Заявка'} ${booking.publicCode}`;
+    const canAdminDecide = state.user?.role === 'ADMIN'
+      && ['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status);
+    const calendarUrl = booking.googleCalendarDayUrl
+      || (state.mode === 'demo' && canAdminDecide ? calendarDayUrl(booking.startAt, booking.timezone) : null);
+    $('bookingDetailCode').textContent = booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Детали встречи';
     $('bookingDetailTitle').textContent = booking.title;
     $('bookingDetailFormat').textContent = format;
     $('bookingDetailFormat').className = `format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}`;
@@ -546,14 +550,19 @@
     elements.detailCard.innerHTML = `
       <div class="detail-status-row"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div><span>${booking.durationMinutes} мин</span></div>
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
+      ${canAdminDecide ? renderCalendarReviewCard(calendarUrl) : ''}
       <dl class="detail-list">
-        <div><dt>Номер</dt><dd>${escapeHtml(booking.publicCode)}</dd></div>
         <div><dt>Email</dt><dd>${escapeHtml(booking.email || 'Только Telegram')}</dd></div>
         ${booking.rejectionReason ? `<div><dt>Причина</dt><dd>${escapeHtml(booking.rejectionReason)}</dd></div>` : ''}
       </dl>${comment}${meetLink}`;
     const actions = [];
-    if (booking.canReschedule) actions.push(`<button class="secondary-button" type="button" data-reschedule-id="${escapeHtml(booking.id)}">Перенести</button>`);
-    if (booking.canCancel) actions.push(`<button class="danger-button" type="button" data-cancel-id="${escapeHtml(booking.id)}">Отменить</button>`);
+    if (canAdminDecide) {
+      if (booking.status === 'PENDING_APPROVAL') actions.push(`<button class="primary-button" type="button" data-admin-action="confirm" data-admin-id="${escapeHtml(booking.id)}">Подтвердить</button>`);
+      actions.push(`<button class="danger-button" type="button" data-admin-action="reject" data-admin-id="${escapeHtml(booking.id)}">Отклонить</button>`);
+    } else {
+      if (booking.canReschedule) actions.push(`<button class="secondary-button" type="button" data-reschedule-id="${escapeHtml(booking.id)}">Перенести</button>`);
+      if (booking.canCancel) actions.push(`<button class="danger-button" type="button" data-cancel-id="${escapeHtml(booking.id)}">Отменить</button>`);
+    }
     elements.detailActions.className = `detail-actions${actions.length === 2 ? ' two' : ''}`;
     elements.detailActions.innerHTML = actions.join('');
   }
@@ -772,7 +781,7 @@
       : '';
     return `<article class="approval-card">
       <div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div>
-      <div class="approval-head"><div><span class="request-code">${escapeHtml(booking.publicCode)}</span><h3>${escapeHtml(booking.title)}</h3><p>${escapeHtml(booking.user.displayName)}${account}</p></div><span class="format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}">${format}</span></div>
+      <div class="approval-head"><div><span class="request-code">${booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Новая встреча'}</span><h3>${escapeHtml(booking.title)}</h3><p>${escapeHtml(booking.user.displayName)}${account}</p></div><span class="format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}">${format}</span></div>
       <div class="approval-time"><span class="date-tile compact"><span>${escapeHtml(adminMonth(booking.startAt))}</span><strong>${new Date(booking.startAt).toLocaleString('ru-RU', { timeZone: booking.timezone, day: 'numeric' })}</strong></span><div><strong>${escapeHtml(formatBookingMoment(booking))}</strong><p>${escapeHtml(timezoneLabel(booking.timezone))} · ${booking.durationMinutes} минут</p></div></div>
       ${warning}${actions}
       <button class="outline-button full-width" type="button" data-admin-booking-id="${escapeHtml(booking.id)}">Открыть заявку</button>
@@ -797,22 +806,14 @@
   function renderAdminDetail(booking) {
     const status = bookingStatus(booking);
     const format = booking.meetingFormat === 'ONLINE' ? 'Онлайн' : 'Личная';
-    $('adminDetailCode').textContent = `Заявка ${booking.publicCode}`;
+    $('adminDetailCode').textContent = booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Детали заявки';
     $('adminDetailTitle').textContent = booking.title;
     $('adminDetailFormat').textContent = format;
     $('adminDetailFormat').className = `format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}`;
     elements.adminDetailCard.innerHTML = `
       <div class="detail-status-row"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div><span>${booking.durationMinutes} мин</span></div>
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
-      ${booking.googleCalendarDayUrl ? `<section class="calendar-review-card">
-        <div class="calendar-review-head">
-          <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
-          <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
-        </div>
-        <p>Откроем нужный день календаря. Сравните эту встречу с другими заявками на согласовании.</p>
-        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(booking.googleCalendarDayUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
-        <span class="calendar-review-note">После проверки вернитесь сюда — заявка останется открытой.</span>
-      </section>` : ''}
+      ${renderCalendarReviewCard(booking.googleCalendarDayUrl)}
       <dl class="detail-list">
         <div><dt>Пользователь</dt><dd>${escapeHtml(booking.user.displayName)}</dd></div>
         <div><dt>Telegram</dt><dd>${escapeHtml(booking.user.username ? `@${booking.user.username}` : booking.user.telegramId)}</dd></div>
@@ -828,6 +829,19 @@
     elements.adminDetailActions.innerHTML = actions.join('');
   }
 
+  function renderCalendarReviewCard(calendarUrl) {
+    if (!calendarUrl) return '';
+    return `<section class="calendar-review-card">
+        <div class="calendar-review-head">
+          <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
+          <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
+        </div>
+        <p>Откроем нужный день календаря. Сравните эту встречу с другими заявками на согласовании.</p>
+        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
+        <span class="calendar-review-note">После проверки вернитесь сюда — заявка останется открытой.</span>
+      </section>`;
+  }
+
   function askAdminDecision(booking, action) {
     const copy = {
       confirm: ['Подтвердить встречу?', 'Перед созданием события сервер ещё раз проверит, свободно ли это время.', 'Подтвердить'],
@@ -835,7 +849,11 @@
       block: ['Отклонить и заблокировать?', 'Все ожидающие заявки пользователя будут отклонены, новые заявки перестанут приниматься.', 'Заблокировать'],
     }[action];
     if (!copy) return;
-    state.pendingAdminAction = { bookingId: booking.id, action };
+    state.pendingAdminAction = {
+      bookingId: booking.id,
+      action,
+      returnScreen: state.screen === 'booking-detail' ? 'bookings' : 'admin',
+    };
     elements.modalTitle.textContent = copy[0];
     elements.modalText.textContent = copy[1];
     elements.modalIcon.textContent = action === 'confirm' ? '✓' : '!';
@@ -884,8 +902,9 @@
       };
       const message = messages[result.decision.outcome] || ['Решение сохранено', 'Очередь обновлена.', '✓'];
       closeModal();
-      showScreen('admin', { fromHistory: true });
-      await loadAdminQueue();
+      showScreen(pending.returnScreen, { fromHistory: true });
+      if (pending.returnScreen === 'bookings') await loadBookings();
+      else await loadAdminQueue();
       showModal(...message);
       tg?.HapticFeedback?.notificationOccurred(result.decision.outcome === 'CONFIRMED' ? 'success' : 'warning');
     } catch (error) {
@@ -1107,7 +1126,9 @@
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
         ? state.selectedAdminBooking
-        : state.adminBookings.find((item) => item.id === button.dataset.adminId);
+        : state.selectedBooking?.id === button.dataset.adminId
+          ? state.selectedBooking
+          : state.adminBookings.find((item) => item.id === button.dataset.adminId);
       if (booking) askAdminDecision(booking, button.dataset.adminAction);
       return;
     }

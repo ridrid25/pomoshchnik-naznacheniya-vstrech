@@ -300,7 +300,9 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       { headers: { cookie: regularCookie } },
     );
     assert.equal(bookingDetail.status, 200);
-    assert.equal((await bookingDetail.json()).booking.canCancel, true);
+    const bookingDetailBody = await bookingDetail.json();
+    assert.equal(bookingDetailBody.booking.canCancel, true);
+    assert.equal(bookingDetailBody.booking.googleCalendarDayUrl, null);
 
     const emailPreferences = await updateNotifications(
       origin,
