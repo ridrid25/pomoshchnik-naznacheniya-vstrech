@@ -591,6 +591,69 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       ),
     );
 
+    const forbiddenRestrictions = await fetch(
+      `${origin}/api/mini-app/v1/admin/restrictions`,
+      { headers: { cookie: regularCookie } },
+    );
+    assert.equal(forbiddenRestrictions.status, 403);
+    const restrictionDate = dates.dates.at(-1);
+    assert.ok(restrictionDate);
+    const wrongRestrictionOrigin = await fetch(
+      `${origin}/api/mini-app/v1/admin/restrictions`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie, origin: 'https://attacker.example' },
+        body: JSON.stringify({ date: restrictionDate, type: 'FULL_DAY' }),
+      },
+    );
+    assert.equal(wrongRestrictionOrigin.status, 403);
+    const createRestriction = await fetch(
+      `${origin}/api/mini-app/v1/admin/restrictions`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie, origin },
+        body: JSON.stringify({
+          date: restrictionDate,
+          type: 'FULL_DAY',
+          comment: 'M10 full-day restriction',
+        }),
+      },
+    );
+    assert.equal(createRestriction.status, 200, await createRestriction.clone().text());
+    const createdRestriction = await createRestriction.json();
+    assert.equal(createdRestriction.created, true);
+    assert.equal(createdRestriction.restriction.date, restrictionDate);
+    assert.equal(createdRestriction.restriction.type, 'FULL_DAY');
+    const duplicateRestriction = await fetch(
+      `${origin}/api/mini-app/v1/admin/restrictions`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie, origin },
+        body: JSON.stringify({ date: restrictionDate, type: 'FULL_DAY' }),
+      },
+    ).then((response) => response.json());
+    assert.equal(duplicateRestriction.created, false);
+    const restrictedSlots = await fetch(
+      `${origin}/api/mini-app/v1/availability/slots?duration=30&date=${restrictionDate}`,
+      { headers: { cookie: regularCookie } },
+    ).then((response) => response.json());
+    assert.equal(restrictedSlots.slots.length, 0);
+    const restrictionList = await fetch(
+      `${origin}/api/mini-app/v1/admin/restrictions`,
+      { headers: { cookie } },
+    ).then((response) => response.json());
+    assert.ok(
+      restrictionList.restrictions.some(
+        (restriction) => restriction.id === createdRestriction.restriction.id,
+      ),
+    );
+    const deleteRestriction = await fetch(
+      `${origin}/api/mini-app/v1/admin/restrictions/${createdRestriction.restriction.id}`,
+      { method: 'DELETE', headers: { cookie, origin } },
+    );
+    assert.equal(deleteRestriction.status, 200, await deleteRestriction.clone().text());
+    assert.equal((await deleteRestriction.json()).deleted, true);
+
     const logoutResponse = await fetch(`${origin}/api/mini-app/v1/session`, {
       method: 'DELETE',
       headers: { cookie, origin },

@@ -35,6 +35,10 @@
     maxMeetingsPerDay: $('maxMeetingsPerDay'), bufferBeforeMinutes: $('bufferBeforeMinutes'),
     bufferAfterMinutes: $('bufferAfterMinutes'), saveScheduleSettings: $('saveScheduleSettings'),
     restrictionCount: $('restrictionCount'), blockedUserCount: $('blockedUserCount'), templateCount: $('templateCount'),
+    restrictionForm: $('restrictionForm'), restrictionDate: $('restrictionDate'), restrictionType: $('restrictionType'),
+    restrictionTimeFields: $('restrictionTimeFields'), restrictionStartTime: $('restrictionStartTime'), restrictionEndTime: $('restrictionEndTime'),
+    restrictionComment: $('restrictionComment'), saveRestriction: $('saveRestriction'), restrictionList: $('restrictionList'),
+    restrictionsState: $('restrictionsState'), restrictionListCount: $('restrictionListCount'),
     scrollControls: $('scrollControls'), scrollUp: $('scrollUp'), scrollDown: $('scrollDown'),
   };
 
@@ -49,6 +53,7 @@
     notificationChannel: 'TELEGRAM',
     adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null, reliability: null },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
+    restrictions: [], pendingRestrictionDeleteId: null,
   };
 
   const stepCopy = {
@@ -147,7 +152,7 @@
       screen.classList.toggle('is-active', active);
       screen.setAttribute('aria-hidden', String(!active));
     });
-    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings';
+    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-restrictions';
     elements.bottomNav.classList.toggle('is-hidden', flow);
     elements.back.classList.toggle('is-hidden', !flow);
     if (tg) flow ? tg.BackButton.show() : tg.BackButton.hide();
@@ -162,6 +167,7 @@
     if (name === 'bookings') void loadBookings();
     if (name === 'admin') void loadAdminQueue();
     if (name === 'admin-settings') void loadAdminSettings();
+    if (name === 'admin-restrictions') void loadRestrictions();
     scrollTo({ top: 0, behavior: 'smooth' });
     requestAnimationFrame(updateScrollControls);
   }
@@ -704,6 +710,104 @@
     }
   }
 
+  async function loadRestrictions() {
+    if (state.user?.role !== 'ADMIN') return;
+    elements.restrictionsState.textContent = 'Загружаем ограничения…';
+    elements.restrictionsState.classList.remove('is-hidden');
+    elements.restrictionList.replaceChildren();
+    elements.restrictionDate.min = isoDate(new Date());
+    if (!elements.restrictionDate.value) elements.restrictionDate.value = isoDate(new Date());
+    try {
+      const payload = await api('/admin/restrictions');
+      state.restrictions = payload.restrictions;
+      renderRestrictions();
+    } catch (error) {
+      elements.restrictionsState.textContent = error.message || 'Не удалось загрузить ограничения';
+    }
+  }
+
+  function renderRestrictions() {
+    elements.restrictionListCount.textContent = state.restrictions.length;
+    elements.restrictionCount.textContent = state.restrictions.length;
+    elements.restrictionList.innerHTML = state.restrictions.map((restriction) => {
+      const interval = restriction.type === 'FULL_DAY'
+        ? 'Весь день'
+        : `${minuteTime(restriction.startMinute)}–${minuteTime(restriction.endMinute)}`;
+      const month = new Intl.DateTimeFormat('ru-RU', { month: 'short' })
+        .format(new Date(`${restriction.date}T12:00:00`)).replace('.', '').toUpperCase();
+      return `<article class="restriction-card"><div class="restriction-date"><span>${escapeHtml(month)}</span><strong>${Number(restriction.date.slice(8, 10))}</strong></div><div><h3>${escapeHtml(formatLongDate(restriction.date))}</h3><p>${escapeHtml(interval)}${restriction.comment ? ` · ${escapeHtml(restriction.comment)}` : ''}</p></div><button type="button" data-delete-restriction-id="${escapeHtml(restriction.id)}" aria-label="Удалить ограничение">×</button></article>`;
+    }).join('');
+    elements.restrictionsState.textContent = state.restrictions.length ? '' : 'Будущих ограничений пока нет';
+    elements.restrictionsState.classList.toggle('is-hidden', state.restrictions.length > 0);
+  }
+
+  function toggleRestrictionTimeFields() {
+    const interval = elements.restrictionType.value === 'TIME_INTERVAL';
+    elements.restrictionTimeFields.classList.toggle('is-hidden', !interval);
+    elements.restrictionStartTime.required = interval;
+    elements.restrictionEndTime.required = interval;
+  }
+
+  async function saveRestriction(event) {
+    event.preventDefault();
+    const interval = elements.restrictionType.value === 'TIME_INTERVAL';
+    const payload = {
+      date: elements.restrictionDate.value,
+      type: elements.restrictionType.value,
+      startTime: interval ? elements.restrictionStartTime.value : null,
+      endTime: interval ? elements.restrictionEndTime.value : null,
+      comment: elements.restrictionComment.value.trim() || null,
+    };
+    elements.saveRestriction.disabled = true;
+    elements.saveRestriction.textContent = 'Сохраняем…';
+    try {
+      const result = await api('/admin/restrictions', { method: 'POST', body: JSON.stringify(payload) });
+      elements.restrictionComment.value = '';
+      showToast(result.created ? 'Время закрыто для записи' : 'Такое ограничение уже существует');
+      await loadRestrictions();
+      tg?.HapticFeedback?.notificationOccurred('success');
+    } catch (error) {
+      showToast(error.message || 'Не удалось закрыть время');
+    } finally {
+      elements.saveRestriction.disabled = false;
+      elements.saveRestriction.textContent = 'Закрыть время';
+    }
+  }
+
+  function askDeleteRestriction(id) {
+    state.pendingRestrictionDeleteId = id;
+    state.pendingAdminAction = null;
+    state.pendingCancelId = null;
+    elements.modalTitle.textContent = 'Удалить ограничение?';
+    elements.modalText.textContent = 'Это время снова появится среди доступных окон.';
+    elements.modalIcon.textContent = '!';
+    elements.modalReasonBlock.classList.add('is-hidden');
+    elements.modalClose.classList.add('is-hidden');
+    elements.modalConfirmActions.classList.remove('is-hidden');
+    elements.modalConfirm.className = 'danger-button';
+    elements.modalConfirm.textContent = 'Да, удалить';
+    elements.modalCancel.textContent = 'Назад';
+    elements.modal.classList.remove('is-hidden');
+    elements.modalCancel.focus();
+  }
+
+  async function deleteRestriction() {
+    const id = state.pendingRestrictionDeleteId;
+    if (!id) return;
+    elements.modalConfirm.disabled = true;
+    elements.modalConfirm.textContent = 'Удаляем…';
+    try {
+      await api(`/admin/restrictions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      closeModal();
+      await loadRestrictions();
+      showToast('Ограничение удалено');
+    } catch (error) {
+      showToast(error.message || 'Не удалось удалить ограничение');
+    } finally {
+      elements.modalConfirm.disabled = false;
+    }
+  }
+
   async function loadAdminQueue() {
     if (state.user?.role !== 'ADMIN') return;
     elements.adminQueueState.textContent = 'Загружаем очередь…';
@@ -1008,6 +1112,7 @@
   function closeModal() {
     state.pendingCancelId = null;
     state.pendingAdminAction = null;
+    state.pendingRestrictionDeleteId = null;
     elements.modalReasonBlock.classList.add('is-hidden');
     elements.modalReason.value = '';
     elements.modal.classList.add('is-hidden');
@@ -1047,6 +1152,7 @@
       return;
     }
     if (button.dataset.adminBookingId) { void openAdminBooking(button.dataset.adminBookingId); return; }
+    if (button.dataset.deleteRestrictionId) { askDeleteRestriction(button.dataset.deleteRestrictionId); return; }
     if (button.dataset.calendarUrl) { openCalendarDay(button.dataset.calendarUrl); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
@@ -1090,6 +1196,8 @@
   new MutationObserver(() => requestAnimationFrame(updateScrollControls))
     .observe($('app'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   elements.scheduleSettingsForm.addEventListener('submit', saveAdminSchedule);
+  elements.restrictionForm.addEventListener('submit', saveRestriction);
+  elements.restrictionType.addEventListener('change', toggleRestrictionTimeFields);
   elements.back.addEventListener('click', goBack);
   elements.previous.addEventListener('click', () => setWizardStep(state.step - 1));
   elements.next.addEventListener('click', async () => {
@@ -1103,7 +1211,8 @@
   elements.modalClose.addEventListener('click', closeModal);
   elements.modalCancel.addEventListener('click', closeModal);
   elements.modalConfirm.addEventListener('click', () => {
-    if (state.pendingAdminAction) void executeAdminDecision();
+    if (state.pendingRestrictionDeleteId) void deleteRestriction();
+    else if (state.pendingAdminAction) void executeAdminDecision();
     else void cancelSelectedBooking();
   });
   elements.modal.addEventListener('click', (event) => { if (event.target === elements.modal) closeModal(); });

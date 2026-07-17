@@ -1149,12 +1149,37 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .settings-fields select { width: 100%; min-height: 43px; padding: 0 31px 0 11px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-solid); color: var(--text); font-size: 11px; }
 .admin-tools-overview > p { margin-top: 13px; color: var(--text-soft); font-size: 10px; line-height: 1.5; }
 .admin-tool-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
-.admin-tool-metrics > div { display: grid; place-items: center; gap: 3px; padding: 10px 4px; border-radius: 14px; background: var(--surface-soft); text-align: center; }
+.admin-tool-metrics > div,
+.admin-tool-metrics > button { display: grid; place-items: center; gap: 3px; padding: 10px 4px; border-radius: 14px; background: var(--surface-soft); text-align: center; }
+.admin-tool-metrics > button { width: 100%; color: var(--text); }
 .admin-tool-metrics .metric-icon { width: 32px; height: 32px; border-radius: 11px; font-size: 12px; }
 .admin-tool-metrics strong { font-size: 17px; }
 .admin-tool-metrics small { color: var(--text-soft); font-size: 8px; }
 .metric-icon.warm { background: var(--warm-soft); color: #d48428; }
 .metric-icon.coral { background: var(--danger-soft); color: var(--danger); }
+.restriction-form { margin-bottom: 20px; padding: 17px; border: 1px solid color-mix(in srgb, var(--warm) 25%, var(--line)); border-radius: var(--radius-lg); background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--warm-soft) 42%, var(--surface-solid))); box-shadow: var(--shadow-soft); }
+.restriction-fields,
+.restriction-time-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 15px 0 10px; }
+.restriction-fields label,
+.restriction-time-fields label,
+.restriction-comment { display: grid; gap: 6px; color: var(--text-soft); font-size: 9px; }
+.restriction-fields input,
+.restriction-fields select,
+.restriction-time-fields input,
+.restriction-comment textarea { width: 100%; min-height: 43px; padding: 0 11px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-solid); color: var(--text); font: inherit; font-size: 11px; }
+.restriction-comment textarea { min-height: 76px; padding: 11px; resize: vertical; }
+.restriction-form > .primary-button { margin-top: 13px; }
+.restriction-list-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.restriction-list-head h2 { margin-top: 4px; font-size: 17px; }
+.restriction-list-head > span { display: grid; min-width: 31px; height: 31px; place-items: center; border-radius: 11px; background: var(--warm-soft); color: #bd681c; font-size: 12px; font-weight: 750; }
+.restriction-list { display: grid; gap: 10px; }
+.restriction-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-soft); }
+.restriction-date { display: grid; width: 49px; min-height: 57px; place-content: center; border-radius: 14px; background: var(--warm-soft); color: #bd681c; text-align: center; }
+.restriction-date span { font-size: 8px; font-weight: 750; }
+.restriction-date strong { font-size: 20px; line-height: 1; }
+.restriction-card h3 { font-size: 13px; }
+.restriction-card p { margin-top: 4px; color: var(--text-soft); font-size: 10px; line-height: 1.35; }
+.restriction-card > button { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-size: 19px; }
 .approval-card { margin-bottom: 12px; }
 .admin-queue { display: grid; gap: 12px; }
 .admin-queue .approval-card { margin-bottom: 0; }

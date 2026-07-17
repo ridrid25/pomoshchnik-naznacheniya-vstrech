@@ -141,3 +141,13 @@ export interface MiniAppAdminSettingsContract {
     templates: number;
   };
 }
+
+export interface MiniAppAdminRestrictionContract {
+  id: string;
+  date: string;
+  type: 'FULL_DAY' | 'TIME_INTERVAL';
+  startMinute: number | null;
+  endMinute: number | null;
+  comment: string | null;
+  createdAt: string;
+}

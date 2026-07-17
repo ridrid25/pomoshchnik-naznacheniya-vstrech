@@ -12,6 +12,7 @@ import { TelegramInitDataService } from './auth/telegram-init-data.service';
 import { MiniAppAvailabilityController } from './mini-app-availability.controller';
 import { MiniAppAdminBookingsController } from './mini-app-admin-bookings.controller';
 import { MiniAppAdminSettingsController } from './mini-app-admin-settings.controller';
+import { MiniAppAdminRestrictionsController } from './mini-app-admin-restrictions.controller';
 import { MiniAppBookingController } from './mini-app-booking.controller';
 import { MiniAppMeController } from './mini-app-me.controller';
 import { MiniAppPageController } from './mini-app-page.controller';
@@ -31,6 +32,7 @@ import { MiniAppUserBookingsController } from './mini-app-user-bookings.controll
     MiniAppPreferencesController,
     MiniAppAdminBookingsController,
     MiniAppAdminSettingsController,
+    MiniAppAdminRestrictionsController,
   ],
   providers: [
     TelegramInitDataService,

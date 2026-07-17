@@ -304,13 +304,36 @@
           <section class="admin-tools-overview" aria-labelledby="adminToolsTitle">
             <div class="settings-section-head"><div><p class="eyebrow">Следующие разделы</p><h2 id="adminToolsTitle">Контроль записей</h2></div></div>
             <div class="admin-tool-metrics">
-              <div><span class="metric-icon warm">◷</span><strong id="restrictionCount">0</strong><small>Ограничения</small></div>
+              <button type="button" data-nav="admin-restrictions"><span class="metric-icon warm">◷</span><strong id="restrictionCount">0</strong><small>Закрытые даты</small></button>
               <div><span class="metric-icon coral">!</span><strong id="blockedUserCount">0</strong><small>Заблокированы</small></div>
               <div><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></div>
             </div>
-            <p>Управление отдельными датами, пользователями и текстами добавим следующими блоками этого этапа.</p>
+            <p>Закрытые даты уже доступны. Управление пользователями и текстами добавим следующими блоками.</p>
           </section>
         </div>
+      </section>
+
+      <section class="screen" data-screen="admin-restrictions" aria-labelledby="adminRestrictionsTitle">
+        <div class="page-heading">
+          <div><p class="eyebrow">Центр управления</p><h1 id="adminRestrictionsTitle">Закрытые даты</h1></div>
+          <span class="format-chip personal">Расписание</span>
+        </div>
+        <form class="restriction-form" id="restrictionForm">
+          <div class="settings-section-head"><div><p class="eyebrow">Новое ограничение</p><h2>Убрать время из записи</h2></div></div>
+          <div class="restriction-fields">
+            <label><span>Дата</span><input id="restrictionDate" type="date" required></label>
+            <label><span>Что закрыть</span><select id="restrictionType"><option value="FULL_DAY">Весь день</option><option value="TIME_INTERVAL">Интервал времени</option></select></label>
+          </div>
+          <div class="restriction-time-fields is-hidden" id="restrictionTimeFields">
+            <label><span>С</span><input id="restrictionStartTime" type="time" value="09:00"></label>
+            <label><span>До</span><input id="restrictionEndTime" type="time" value="10:00"></label>
+          </div>
+          <label class="restriction-comment"><span>Комментарий — необязательно</span><textarea id="restrictionComment" maxlength="500" placeholder="Например: личные дела"></textarea></label>
+          <button class="primary-button full-width" id="saveRestriction" type="submit">Закрыть время</button>
+        </form>
+        <div class="restriction-list-head"><div><p class="eyebrow">Будущие ограничения</p><h2>Недоступное время</h2></div><span id="restrictionListCount">0</span></div>
+        <p class="availability-state" id="restrictionsState" role="status">Загружаем ограничения…</p>
+        <div class="restriction-list" id="restrictionList"></div>
       </section>
 
       <nav class="bottom-nav" aria-label="Основная навигация">
