@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { spawn } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import { resolve } from 'node:path';
@@ -12,6 +12,13 @@ const BOT_TOKEN = '123456789:mini-app-test-token';
 const ADMIN_TELEGRAM_ID = '900000001';
 
 test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000 }, async () => {
+  const sessionServiceSource = readFileSync(
+    resolve(process.cwd(), 'src', 'mini-app', 'auth', 'mini-app-session.service.ts'),
+    'utf8',
+  );
+  assert.match(sessionServiceSource, /sameSite: production \? 'none' : 'strict'/u);
+  assert.match(sessionServiceSource, /partitioned: production/u);
+
   const port = await getFreePort();
   const telegramPort = await getFreePort();
   const telegramRequests = [];

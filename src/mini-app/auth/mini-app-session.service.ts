@@ -73,17 +73,20 @@ export class MiniAppSessionService {
     httpOnly: true;
     maxAge: number;
     path: string;
-    sameSite: 'strict';
+    sameSite: 'strict' | 'none';
     secure: boolean;
+    partitioned: boolean;
   } {
+    const production = this.config.get<string>('app.nodeEnv') === 'production';
     return {
       httpOnly: true,
       maxAge:
         (this.config.get<number>('app.miniAppSessionTtlSeconds') ?? 7200) *
         1000,
       path: '/api/mini-app',
-      sameSite: 'strict',
-      secure: this.config.get<string>('app.nodeEnv') === 'production',
+      sameSite: production ? 'none' : 'strict',
+      secure: production,
+      partitioned: production,
     };
   }
 
