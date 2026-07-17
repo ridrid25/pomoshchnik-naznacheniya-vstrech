@@ -721,14 +721,18 @@
     const account = booking.user.username ? ` · @${escapeHtml(booking.user.username)}` : '';
     const warning = booking.queueState === 'TECHNICAL_ERROR'
       ? '<div class="queue-warning">Google Calendar не подтвердил встречу. Заявку можно отклонить или заблокировать.</div>'
+      : booking.status === 'PENDING_APPROVAL' && booking.slotAvailable === false
+        ? '<div class="queue-warning">Это время уже занято в календаре. Подтвердить встречу нельзя, но заявку можно отклонить.</div>'
       : '';
-    const actions = booking.canConfirm
-      ? `<div class="approval-actions"><button class="primary-button" type="button" data-admin-action="confirm" data-admin-id="${escapeHtml(booking.id)}">Подтвердить</button><button class="danger-button" type="button" data-admin-action="reject" data-admin-id="${escapeHtml(booking.id)}">Отклонить</button></div>`
-      : '';
+    const actionButtons = [];
+    if (booking.canConfirm) actionButtons.push(`<button class="primary-button" type="button" data-admin-action="confirm" data-admin-id="${escapeHtml(booking.id)}">Подтвердить</button>`);
+    if (booking.canReject) actionButtons.push(`<button class="danger-button" type="button" data-admin-action="reject" data-admin-id="${escapeHtml(booking.id)}">Отклонить</button>`);
+    const actions = actionButtons.length ? `<div class="approval-actions${actionButtons.length === 1 ? ' one' : ''}">${actionButtons.join('')}</div>` : '';
     return `<article class="approval-card">
       <div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div>
       <div class="approval-head"><div><span class="request-code">${booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Новая встреча'}</span><h3>${escapeHtml(booking.title)}</h3><p>${escapeHtml(booking.user.displayName)}${account}</p></div><span class="format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}">${format}</span></div>
       <div class="approval-time"><span class="date-tile compact"><span>${escapeHtml(adminMonth(booking.startAt))}</span><strong>${new Date(booking.startAt).toLocaleString('ru-RU', { timeZone: booking.timezone, day: 'numeric' })}</strong></span><div><strong>${escapeHtml(formatBookingMoment(booking))}</strong><p>${escapeHtml(timezoneLabel(booking.timezone))} · ${booking.durationMinutes} минут</p></div></div>
+      ${renderAdminSlotState(booking)}
       ${warning}${actions}
       <button class="outline-button full-width" type="button" data-admin-booking-id="${escapeHtml(booking.id)}">Открыть заявку</button>
     </article>`;
@@ -756,6 +760,7 @@
     elements.adminDetailCard.innerHTML = `
       <div class="detail-status-row"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div><span>${booking.durationMinutes} мин</span></div>
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
+      ${renderAdminSlotState(booking)}
       ${renderCalendarReviewCard(booking.googleCalendarDayUrl)}
       <dl class="detail-list">
         <div><dt>Пользователь</dt><dd>${escapeHtml(booking.user.displayName)}</dd></div>
@@ -770,6 +775,12 @@
     if (booking.canBlock) actions.push(`<button class="text-button destructive-text" type="button" data-admin-action="block" data-admin-id="${escapeHtml(booking.id)}">Отклонить и заблокировать</button>`);
     elements.adminDetailActions.className = `detail-actions${actions.length === 2 ? ' two' : ''}`;
     elements.adminDetailActions.innerHTML = actions.join('');
+  }
+
+  function renderAdminSlotState(booking) {
+    if (booking.status !== 'PENDING_APPROVAL' || typeof booking.slotAvailable !== 'boolean') return '';
+    const available = booking.slotAvailable;
+    return `<div class="queue-slot-state ${available ? 'available' : 'unavailable'}"><span aria-hidden="true"></span>${available ? 'Время свободно — можно подтверждать' : 'Время уже занято — подтверждение недоступно'}</div>`;
   }
 
   function renderCalendarReviewCard(calendarUrl) {

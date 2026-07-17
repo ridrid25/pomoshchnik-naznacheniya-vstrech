@@ -88,6 +88,7 @@ export interface MiniAppAdminBookingContract
     status: 'ACTIVE' | 'BANNED';
   };
   queueState: 'REQUIRES_DECISION' | 'TECHNICAL_ERROR' | 'PROCESSED';
+  slotAvailable: boolean | null;
   canConfirm: boolean;
   canReject: boolean;
   canBlock: boolean;

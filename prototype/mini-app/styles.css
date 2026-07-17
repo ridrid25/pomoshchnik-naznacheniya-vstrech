@@ -1019,6 +1019,7 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .booking-detail-row i { width: 3px; height: 3px; border-radius: 50%; background: var(--text-soft); }
 .card-actions,
 .approval-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.approval-actions.one { grid-template-columns: 1fr; }
 .card-actions button { min-height: 42px; }
 .booking-card.is-muted { opacity: 0.76; }
 .booking-card { transition: transform 160ms ease, border-color 160ms ease; }
@@ -1157,6 +1158,12 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .approval-actions .danger-button { min-height: 44px; padding: 0 10px; font-size: 12px; }
 .destructive-text { width: 100%; margin-top: 8px; color: var(--danger); }
 .queue-warning { margin-bottom: 14px; padding: 11px 12px; border-radius: 14px; background: var(--danger-soft); color: var(--danger); font-size: 11px; line-height: 1.45; }
+.queue-slot-state { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 9px 11px; border-radius: 12px; font-size: 11px; font-weight: 650; line-height: 1.35; }
+.queue-slot-state span { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
+.queue-slot-state.available { background: var(--teal-soft); color: var(--teal); }
+.queue-slot-state.available span { background: var(--teal); box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal) 15%, transparent); }
+.queue-slot-state.unavailable { background: var(--danger-soft); color: var(--danger); }
+.queue-slot-state.unavailable span { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent); }
 
 .bottom-nav {
   position: fixed;

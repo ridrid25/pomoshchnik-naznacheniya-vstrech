@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
+import { AvailabilityService } from '../availability/availability.service';
 import {
   BookingDecisionService,
   type BookingDecisionAction,
@@ -49,6 +50,7 @@ export class MiniAppAdminBookingsController {
     private readonly prisma: PrismaService,
     private readonly decisions: BookingDecisionService,
     private readonly googleCalendar: GoogleCalendarService,
+    private readonly availability: AvailabilityService,
   ) {}
 
   @Get()
@@ -85,8 +87,11 @@ export class MiniAppAdminBookingsController {
         },
       }),
     ]);
+    const bookingContracts = await Promise.all(
+      bookings.map((booking) => this.toContract(booking)),
+    );
     return {
-      bookings: bookings.map((booking) => toAdminBookingContract(booking)),
+      bookings: bookingContracts,
       summary: { pending, decidedToday },
     };
   }
@@ -100,7 +105,9 @@ export class MiniAppAdminBookingsController {
       booking.startAt,
       booking.timezone,
     );
-    return { booking: toAdminBookingContract(booking, googleCalendarDayUrl) };
+    return {
+      booking: await this.toContract(booking, googleCalendarDayUrl),
+    };
   }
 
   @Post(':id/:action')
@@ -125,7 +132,7 @@ export class MiniAppAdminBookingsController {
     });
     return {
       decision,
-      booking: toAdminBookingContract(await this.findBooking(id)),
+      booking: await this.toContract(await this.findBooking(id)),
     };
   }
 
@@ -136,6 +143,37 @@ export class MiniAppAdminBookingsController {
     });
     if (!booking) throw new NotFoundException('Booking not found');
     return booking;
+  }
+
+  private async toContract(
+    booking: AdminBooking,
+    googleCalendarDayUrl: string | null = null,
+  ): Promise<MiniAppAdminBookingContract> {
+    const slotAvailable =
+      booking.status === BookingStatus.PENDING_APPROVAL
+        ? await this.isBookingSlotAvailable(booking)
+        : null;
+    return toAdminBookingContract(
+      booking,
+      googleCalendarDayUrl,
+      slotAvailable,
+    );
+  }
+
+  private async isBookingSlotAvailable(
+    booking: AdminBooking,
+  ): Promise<boolean> {
+    const { date, time } = dateAndTimeInZone(
+      booking.startAt,
+      booking.timezone,
+    );
+    return this.availability.isSlotAvailable(
+      date,
+      time,
+      booking.durationMinutes,
+      new Date(),
+      booking.id,
+    );
   }
 }
 
@@ -174,6 +212,7 @@ function requireAdminTelegramId(request: MiniAppRequest): bigint {
 function toAdminBookingContract(
   booking: AdminBooking,
   googleCalendarDayUrl: string | null = null,
+  slotAvailable: boolean | null = null,
 ): MiniAppAdminBookingContract {
   if (!booking.publicCode) throw new Error('Booking public code is missing');
   const endAt = new Date(
@@ -214,9 +253,31 @@ function toAdminBookingContract(
       : pending
         ? 'REQUIRES_DECISION'
         : 'PROCESSED',
-    canConfirm: pending,
+    slotAvailable,
+    canConfirm: pending && slotAvailable !== false,
     canReject: pending || technicalError,
     canBlock:
       (pending || technicalError) && booking.user.status === UserStatus.ACTIVE,
+  };
+}
+
+function dateAndTimeInZone(
+  value: Date,
+  timeZone: string,
+): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return {
+    date: `${part('year')}-${part('month')}-${part('day')}`,
+    time: `${part('hour')}:${part('minute')}`,
   };
 }

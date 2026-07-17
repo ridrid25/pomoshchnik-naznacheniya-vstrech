@@ -280,6 +280,12 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
         (booking) => booking.id === firstBookingBody.booking.id,
       ),
     );
+    const pendingAdminBooking = adminQueueBody.bookings.find(
+      (booking) => booking.id === firstBookingBody.booking.id,
+    );
+    assert.equal(pendingAdminBooking.slotAvailable, true);
+    assert.equal(pendingAdminBooking.canConfirm, true);
+    assert.equal(pendingAdminBooking.canReject, true);
     assert.ok(adminQueueBody.summary.pending >= 1);
     const adminDetail = await fetch(
       `${origin}/api/mini-app/v1/admin/bookings/${firstBookingBody.booking.id}`,
@@ -288,6 +294,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(adminDetail.status, 200);
     const adminDetailBody = await adminDetail.json();
     assert.equal(adminDetailBody.booking.user.telegramId, '900000003');
+    assert.equal(adminDetailBody.booking.slotAvailable, true);
     assert.match(
       adminDetailBody.booking.googleCalendarDayUrl,
       /^https:\/\/calendar\.google\.com\/calendar\/r\/day\/\d{4}\/\d{1,2}\/\d{1,2}/u,
@@ -418,6 +425,24 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     );
     assert.equal(repeatedDecision.status, 200);
     assert.equal((await repeatedDecision.json()).decision.outcome, 'ALREADY_PROCESSED');
+
+    const conflictingDatabase = new Database(databasePath);
+    try {
+      conflictingDatabase.prepare(
+        'UPDATE Booking SET startAt = (SELECT startAt FROM Booking WHERE id = ?) WHERE id = ?',
+      ).run(firstBookingBody.booking.id, confirmedBooking.id);
+    } finally {
+      conflictingDatabase.close();
+    }
+    const unavailableAdminDetail = await fetch(
+      `${origin}/api/mini-app/v1/admin/bookings/${firstBookingBody.booking.id}`,
+      { headers: { cookie } },
+    );
+    assert.equal(unavailableAdminDetail.status, 200);
+    const unavailableAdminBooking = (await unavailableAdminDetail.json()).booking;
+    assert.equal(unavailableAdminBooking.slotAvailable, false);
+    assert.equal(unavailableAdminBooking.canConfirm, false);
+    assert.equal(unavailableAdminBooking.canReject, true);
 
     const cancelResponse = await cancelBooking(
       origin,

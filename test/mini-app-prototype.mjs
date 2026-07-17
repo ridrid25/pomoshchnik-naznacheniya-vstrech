@@ -50,6 +50,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /dataset\.calendarUrl/u);
   assert.match(javascript, /tg\?\.openLink/u);
   assert.match(javascript, /renderCalendarReviewCard/u);
+  assert.match(javascript, /renderAdminSlotState/u);
+  assert.match(javascript, /booking\.slotAvailable === false/u);
+  assert.match(javascript, /Время свободно — можно подтверждать/u);
+  assert.match(javascript, /Время уже занято — подтверждение недоступно/u);
   assert.match(javascript, /соседней вкладке[^\n]+«Запись на встречу»/u);
   assert.match(javascript, /бледную плашку «На согласовании»/u);
   assert.doesNotMatch(javascript, /demo=1|enterDemo|demoBookings|createDemo|toDemo|state\.mode/iu);
@@ -63,6 +67,8 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /moveByScrollStop/u);
   assert.match(javascript, /updateScrollControls/u);
   assert.match(css, /calendar-review-card/u);
+  assert.match(css, /queue-slot-state\.available/u);
+  assert.match(css, /queue-slot-state\.unavailable/u);
   assert.match(css, /scroll-controls/u);
   assert.match(html, /id="scrollUp"/u);
   assert.match(html, /id="scrollDown"/u);
