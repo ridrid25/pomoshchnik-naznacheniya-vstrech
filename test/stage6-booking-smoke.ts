@@ -494,6 +494,39 @@ async function main(): Promise<void> {
       ),
     );
 
+    const approvalBooking = await service.create({
+      userId: user.id,
+      durationMinutes: 30,
+      startAt: new Date('2030-02-08T12:00:00.000Z'),
+      timezone: 'Europe/Moscow',
+      title: 'Stage 6 approval reminder',
+      meetingFormat: MeetingFormat.IN_PERSON,
+    });
+    const approvalNow = new Date();
+    await prisma.booking.update({
+      where: { id: approvalBooking.id },
+      data: {
+        createdAt: new Date(approvalNow.getTime() - 20 * 60_000),
+        expiresAt: new Date(approvalNow.getTime() + 60 * 60_000),
+      },
+    });
+    assert.equal(await scheduler.sendApprovalReminders(approvalNow), 1);
+    assert.equal(await scheduler.sendApprovalReminders(approvalNow), 0);
+    assert.ok(
+      telegramMessages.some(({ text }) =>
+        text.includes('Stage 6 approval reminder') && text.includes('20 мин'),
+      ),
+    );
+    assert.equal(
+      await prisma.businessEvent.count({
+        where: {
+          bookingId: approvalBooking.id,
+          eventType: 'ADMIN_APPROVAL_REMINDER',
+        },
+      }),
+      1,
+    );
+
     process.stdout.write(
       `${JSON.stringify({
         event: 'stage6.booking.verification.completed',
@@ -515,6 +548,7 @@ async function main(): Promise<void> {
         telegram_routing_checked: true,
         notification_retry_checked: true,
         one_hour_meeting_reminder_checked: true,
+        admin_approval_reminder_checked: true,
       })}\n`,
     );
   } finally {

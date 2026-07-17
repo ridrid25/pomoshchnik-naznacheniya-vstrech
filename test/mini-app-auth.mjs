@@ -278,6 +278,15 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(firstBookingBody.booking.status, 'PENDING_APPROVAL');
     assert.match(firstBookingBody.booking.publicCode, /^M-/u);
 
+    const agingDatabase = new Database(databasePath);
+    try {
+      agingDatabase.prepare(
+        'UPDATE Booking SET createdAt = ? WHERE id = ?',
+      ).run(new Date(Date.now() - 20 * 60_000).toISOString(), firstBookingBody.booking.id);
+    } finally {
+      agingDatabase.close();
+    }
+
     const adminQueue = await fetch(
       `${origin}/api/mini-app/v1/admin/bookings?scope=pending`,
       { headers: { cookie } },
@@ -295,7 +304,11 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(pendingAdminBooking.slotAvailable, true);
     assert.equal(pendingAdminBooking.canConfirm, true);
     assert.equal(pendingAdminBooking.canReject, true);
+    assert.ok(pendingAdminBooking.waitingMinutes >= 19);
+    assert.equal(pendingAdminBooking.isAging, true);
     assert.ok(adminQueueBody.summary.pending >= 1);
+    assert.ok(adminQueueBody.summary.aging >= 1);
+    assert.ok(adminQueueBody.summary.oldestWaitingMinutes >= 19);
     const adminDetail = await fetch(
       `${origin}/api/mini-app/v1/admin/bookings/${firstBookingBody.booking.id}`,
       { headers: { cookie } },
@@ -304,6 +317,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     const adminDetailBody = await adminDetail.json();
     assert.equal(adminDetailBody.booking.user.telegramId, '900000003');
     assert.equal(adminDetailBody.booking.slotAvailable, true);
+    assert.equal(adminDetailBody.booking.isAging, true);
     assert.match(
       adminDetailBody.booking.googleCalendarDayUrl,
       /^https:\/\/calendar\.google\.com\/calendar\/r\/day\/\d{4}\/\d{1,2}\/\d{1,2}/u,

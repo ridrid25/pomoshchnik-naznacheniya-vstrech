@@ -68,14 +68,16 @@ export class NotificationService {
     return Boolean(this.smtpTransport && this.smtpFrom);
   }
 
-  async notifyAdmin(text: string): Promise<void> {
-    if (!this.telegramBot || !this.adminTelegramId) return;
+  async notifyAdmin(text: string): Promise<boolean> {
+    if (!this.telegramBot || !this.adminTelegramId) return false;
     try {
       await this.telegramBot.api.sendMessage(this.adminTelegramId, text);
+      return true;
     } catch (error: unknown) {
       this.logger.errorEvent('NotificationService', 'admin.notification.failed', {
         error_message: this.safeError(error),
       });
+      return false;
     }
   }
 

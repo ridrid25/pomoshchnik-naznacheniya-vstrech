@@ -89,6 +89,8 @@ export interface MiniAppAdminBookingContract
     status: 'ACTIVE' | 'BANNED';
   };
   queueState: 'REQUIRES_DECISION' | 'TECHNICAL_ERROR' | 'PROCESSED';
+  waitingMinutes: number | null;
+  isAging: boolean;
   slotAvailable: boolean | null;
   canConfirm: boolean;
   canReject: boolean;
@@ -98,6 +100,8 @@ export interface MiniAppAdminBookingContract
 export interface MiniAppAdminQueueSummaryContract {
   pending: number;
   decidedToday: number;
+  aging: number;
+  oldestWaitingMinutes: number | null;
 }
 
 export interface MiniAppAdminSettingsContract {

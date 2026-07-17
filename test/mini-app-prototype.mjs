@@ -60,6 +60,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /retryUnavailableBooking/u);
   assert.match(javascript, /Время свободно — можно подтверждать/u);
   assert.match(javascript, /Время уже занято — подтверждение недоступно/u);
+  assert.match(javascript, /renderQueueAge/u);
+  assert.match(javascript, /waitingMinutes/u);
+  assert.match(javascript, /требуют внимания/u);
+  assert.match(javascript, /Ждёт решения/u);
+  assert.match(css, /queue-age\.aging/u);
+  assert.match(html, /id="adminOldestWait"/u);
   assert.match(javascript, /соседней вкладке[^\n]+«Запись на встречу»/u);
   assert.match(javascript, /бледную плашку «На согласовании»/u);
   assert.doesNotMatch(javascript, /demo=1|enterDemo|demoBookings|createDemo|toDemo|state\.mode/iu);

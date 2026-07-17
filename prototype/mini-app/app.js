@@ -26,7 +26,7 @@
     modalConfirmActions: $('modalConfirmActions'), modalCancel: $('modalCancel'), modalConfirm: $('modalConfirm'),
     modalReasonBlock: $('modalReasonBlock'), modalReason: $('modalReason'),
     adminQueue: $('adminQueue'), adminQueueState: $('adminQueueState'), adminQueueCount: $('adminQueueCount'),
-    adminPendingCount: $('adminPendingCount'), adminDecidedToday: $('adminDecidedToday'), adminNavCount: $('adminNavCount'),
+    adminPendingCount: $('adminPendingCount'), adminDecidedToday: $('adminDecidedToday'), adminOldestWait: $('adminOldestWait'), adminNavCount: $('adminNavCount'),
     adminDetailCard: $('adminDetailCard'), adminDetailActions: $('adminDetailActions'),
     adminSettingsState: $('adminSettingsState'), adminSettingsContent: $('adminSettingsContent'),
     googleIntegrationCard: $('googleIntegrationCard'), scheduleSettingsForm: $('scheduleSettingsForm'),
@@ -47,7 +47,7 @@
     bookingsByScope: { active: [], archive: [] },
     selectedBooking: null, rescheduleOriginal: null, pendingCancelId: null,
     notificationChannel: 'TELEGRAM',
-    adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0 },
+    adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
   };
 
@@ -720,10 +720,14 @@
   }
 
   function renderAdminQueue() {
-    const { pending, decidedToday } = state.adminSummary;
+    const { pending, decidedToday, aging, oldestWaitingMinutes } = state.adminSummary;
     elements.adminQueueCount.textContent = pending;
     elements.adminPendingCount.textContent = `${pending} ${plural(pending, 'заявка', 'заявки', 'заявок')}`;
     elements.adminDecidedToday.textContent = decidedToday;
+    elements.adminOldestWait.textContent = oldestWaitingMinutes === null
+      ? 'Нет ожидания'
+      : `${aging ? `${aging} требуют внимания · ` : ''}самая долгая ${formatWaitingTime(oldestWaitingMinutes)}`;
+    elements.adminOldestWait.classList.toggle('is-aging', aging > 0);
     elements.adminNavCount.textContent = pending;
     elements.adminNavCount.classList.toggle('is-hidden', pending === 0);
     elements.adminQueue.innerHTML = state.adminBookings.map(renderAdminCard).join('');
@@ -749,7 +753,7 @@
     if (booking.canReject) actionButtons.push(`<button class="danger-button" type="button" data-admin-action="reject" data-admin-id="${escapeHtml(booking.id)}">Отклонить</button>`);
     const actions = actionButtons.length ? `<div class="approval-actions${actionButtons.length === 1 ? ' one' : ''}">${actionButtons.join('')}</div>` : '';
     return `<article class="approval-card">
-      <div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div>
+      <div class="approval-meta"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div>${renderQueueAge(booking)}</div>
       <div class="approval-head"><div><span class="request-code">${booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Новая встреча'}</span><h3>${escapeHtml(booking.title)}</h3><p>${escapeHtml(booking.user.displayName)}${account}</p></div><span class="format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}">${format}</span></div>
       <div class="approval-time"><span class="date-tile compact"><span>${escapeHtml(adminMonth(booking.startAt))}</span><strong>${new Date(booking.startAt).toLocaleString('ru-RU', { timeZone: booking.timezone, day: 'numeric' })}</strong></span><div><strong>${escapeHtml(formatBookingMoment(booking))}</strong><p>${escapeHtml(timezoneLabel(booking.timezone))} · ${booking.durationMinutes} минут</p></div></div>
       ${renderAdminSlotState(booking)}
@@ -779,6 +783,7 @@
     $('adminDetailFormat').className = `format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}`;
     elements.adminDetailCard.innerHTML = `
       <div class="detail-status-row"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div><span>${booking.durationMinutes} мин</span></div>
+      ${renderQueueAge(booking)}
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
       ${renderAdminSlotState(booking)}
       ${renderCalendarReviewCard(booking.googleCalendarDayUrl)}
@@ -801,6 +806,11 @@
     if (booking.status !== 'PENDING_APPROVAL' || typeof booking.slotAvailable !== 'boolean') return '';
     const available = booking.slotAvailable;
     return `<div class="queue-slot-state ${available ? 'available' : 'unavailable'}"><span aria-hidden="true"></span>${available ? 'Время свободно — можно подтверждать' : 'Время уже занято — подтверждение недоступно'}</div>`;
+  }
+
+  function renderQueueAge(booking) {
+    if (booking.waitingMinutes === null || booking.waitingMinutes === undefined) return '';
+    return `<div class="queue-age${booking.isAging ? ' aging' : ''}">Ждёт решения ${escapeHtml(formatWaitingTime(booking.waitingMinutes))}</div>`;
   }
 
   function renderCalendarReviewCard(calendarUrl) {
@@ -1078,6 +1088,14 @@
   function addDays(date, days) { const copy = new Date(date); copy.setDate(copy.getDate() + days); return copy; }
   function isoDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
   function plural(value, one, few, many) { const n = Math.abs(value) % 100; const n1 = n % 10; return n > 10 && n < 20 ? many : n1 > 1 && n1 < 5 ? few : n1 === 1 ? one : many; }
+  function formatWaitingTime(minutes) {
+    const value = Math.max(0, Number(minutes) || 0);
+    if (value < 1) return 'меньше минуты';
+    if (value < 60) return `${value} мин`;
+    const hours = Math.floor(value / 60);
+    const rest = value % 60;
+    return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
+  }
   function timezoneLabel(timezone) {
     return ({
       'Europe/Kaliningrad': 'Калининград', 'Europe/Moscow': 'Москва', 'Europe/Samara': 'Самара',

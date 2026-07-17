@@ -10,12 +10,16 @@ import {
 import { JsonLoggerService } from '../logging/json-logger.service';
 import { NotificationService } from '../notifications/notification.service';
 
+const APPROVAL_REMINDER_AFTER_MS = 15 * 60_000;
+const APPROVAL_REMINDER_EVENT = 'ADMIN_APPROVAL_REMINDER';
+
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   private expirationTimer?: NodeJS.Timeout;
   private cleanupTimer?: NodeJS.Timeout;
   private notificationRetryTimer?: NodeJS.Timeout;
   private meetingReminderTimer?: NodeJS.Timeout;
+  private approvalReminderTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly bookings: BookingService,
@@ -27,6 +31,9 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     void this.bookings.syncPendingCalendarMarkers().catch((error: unknown) =>
       this.logFailure('scheduler.pending_calendar_sync.failed', error),
+    );
+    void this.sendApprovalReminders().catch((error: unknown) =>
+      this.logFailure('scheduler.approval_reminder.failed', error),
     );
     this.expirationTimer = setInterval(() => {
       void this.expireAndNotify().catch((error: unknown) =>
@@ -43,6 +50,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         this.logFailure('scheduler.meeting_reminder.failed', error),
       );
     }, 60_000);
+    this.approvalReminderTimer = setInterval(() => {
+      void this.sendApprovalReminders().catch((error: unknown) =>
+        this.logFailure('scheduler.approval_reminder.failed', error),
+      );
+    }, 5 * 60_000);
     this.cleanupTimer = setInterval(() => {
       void this.bookings.cleanupOldData().catch((error: unknown) =>
         this.logFailure('scheduler.cleanup.failed', error),
@@ -51,11 +63,13 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     this.expirationTimer.unref();
     this.notificationRetryTimer.unref();
     this.meetingReminderTimer.unref();
+    this.approvalReminderTimer.unref();
     this.cleanupTimer.unref();
     this.logger.logEvent('SchedulerService', 'scheduler.started', {
       expiration_interval_ms: 60_000,
       notification_retry_interval_ms: 60_000,
       meeting_reminder_interval_ms: 60_000,
+      approval_reminder_interval_ms: 5 * 60_000,
       cleanup_interval_ms: 6 * 60 * 60_000,
     });
   }
@@ -65,6 +79,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     if (this.cleanupTimer) clearInterval(this.cleanupTimer);
     if (this.notificationRetryTimer) clearInterval(this.notificationRetryTimer);
     if (this.meetingReminderTimer) clearInterval(this.meetingReminderTimer);
+    if (this.approvalReminderTimer) clearInterval(this.approvalReminderTimer);
   }
 
   private async expireAndNotify(): Promise<void> {
@@ -118,6 +133,65 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       });
     }
     return sent;
+  }
+
+  async sendApprovalReminders(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - APPROVAL_REMINDER_AFTER_MS);
+    const waiting = await this.prisma.booking.findMany({
+      where: {
+        status: {
+          in: [
+            BookingStatus.PENDING_APPROVAL,
+            BookingStatus.CONFIRMATION_ERROR,
+          ],
+        },
+        createdAt: { lte: cutoff },
+        expiresAt: { gt: now },
+      },
+      include: { user: true },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+    const unsent: Array<{
+      booking: (typeof waiting)[number];
+      waitingMinutes: number;
+    }> = [];
+    for (const booking of waiting) {
+      const exists = await this.prisma.businessEvent.findFirst({
+        where: { bookingId: booking.id, eventType: APPROVAL_REMINDER_EVENT },
+        select: { id: true },
+      });
+      if (exists) continue;
+      const waitingMinutes = Math.max(
+        15,
+        Math.floor((now.getTime() - booking.createdAt.getTime()) / 60_000),
+      );
+      unsent.push({ booking, waitingMinutes });
+    }
+    if (!unsent.length) return 0;
+    const lines = unsent.slice(0, 5).map(
+      ({ booking, waitingMinutes }) =>
+        `• «${booking.title}» — ${booking.user.telegramDisplayName}, ${waitingMinutes} мин.`,
+    );
+    if (unsent.length > 5) lines.push(`• Ещё ${unsent.length - 5}`);
+    const delivered = await this.notifications.notifyAdmin(
+      `⏳ ${unsent.length} заявок ждут решения.\n${lines.join('\n')}\nОткройте Mini App → Согласование.`,
+    );
+    if (!delivered) return 0;
+    for (const { booking, waitingMinutes } of unsent) {
+      await this.prisma.businessEvent.create({
+        data: {
+          eventType: APPROVAL_REMINDER_EVENT,
+          userId: booking.userId,
+          bookingId: booking.id,
+          payload: JSON.stringify({ waitingMinutes }),
+        },
+      });
+    }
+    this.logger.logEvent('SchedulerService', 'approval.reminders.sent', {
+      reminder_count: unsent.length,
+    });
+    return unsent.length;
   }
 
   private logFailure(event: string, error: unknown): void {

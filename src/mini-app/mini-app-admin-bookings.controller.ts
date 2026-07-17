@@ -39,6 +39,8 @@ type AdminBooking = Prisma.BookingGetPayload<{
   include: { user: true; calendarEvent: true };
 }>;
 
+const AGING_AFTER_MS = 15 * 60_000;
+
 interface DecisionBody {
   reason?: unknown;
 }
@@ -67,7 +69,9 @@ export class MiniAppAdminBookingsController {
     ];
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-    const [bookings, pending, decidedToday] = await this.prisma.$transaction([
+    const now = new Date();
+    const agingCutoff = new Date(now.getTime() - AGING_AFTER_MS);
+    const [bookings, pending, decidedToday, aging, oldestPending] = await this.prisma.$transaction([
       this.prisma.booking.findMany({
         where:
           scope === 'pending'
@@ -86,13 +90,31 @@ export class MiniAppAdminBookingsController {
           updatedAt: { gte: startOfToday },
         },
       }),
+      this.prisma.booking.count({
+        where: {
+          status: { in: pendingStatuses },
+          createdAt: { lte: agingCutoff },
+        },
+      }),
+      this.prisma.booking.findFirst({
+        where: { status: { in: pendingStatuses } },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      }),
     ]);
     const bookingContracts = await Promise.all(
-      bookings.map((booking) => this.toContract(booking)),
+      bookings.map((booking) => this.toContract(booking, null, now)),
     );
     return {
       bookings: bookingContracts,
-      summary: { pending, decidedToday },
+      summary: {
+        pending,
+        decidedToday,
+        aging,
+        oldestWaitingMinutes: oldestPending
+          ? Math.max(0, Math.floor((now.getTime() - oldestPending.createdAt.getTime()) / 60_000))
+          : null,
+      },
     };
   }
 
@@ -148,6 +170,7 @@ export class MiniAppAdminBookingsController {
   private async toContract(
     booking: AdminBooking,
     googleCalendarDayUrl: string | null = null,
+    now = new Date(),
   ): Promise<MiniAppAdminBookingContract> {
     const slotAvailable =
       booking.status === BookingStatus.PENDING_APPROVAL
@@ -157,6 +180,7 @@ export class MiniAppAdminBookingsController {
       booking,
       googleCalendarDayUrl,
       slotAvailable,
+      now,
     );
   }
 
@@ -213,6 +237,7 @@ function toAdminBookingContract(
   booking: AdminBooking,
   googleCalendarDayUrl: string | null = null,
   slotAvailable: boolean | null = null,
+  now = new Date(),
 ): MiniAppAdminBookingContract {
   if (!booking.publicCode) throw new Error('Booking public code is missing');
   const endAt = new Date(
@@ -220,6 +245,10 @@ function toAdminBookingContract(
   );
   const pending = booking.status === BookingStatus.PENDING_APPROVAL;
   const technicalError = booking.status === BookingStatus.CONFIRMATION_ERROR;
+  const requiresDecision = pending || technicalError;
+  const waitingMinutes = requiresDecision
+    ? Math.max(0, Math.floor((now.getTime() - booking.createdAt.getTime()) / 60_000))
+    : null;
   return {
     id: booking.id,
     publicCode: booking.publicCode,
@@ -253,6 +282,8 @@ function toAdminBookingContract(
       : pending
         ? 'REQUIRES_DECISION'
         : 'PROCESSED',
+    waitingMinutes,
+    isAging: waitingMinutes !== null && waitingMinutes >= 15,
     slotAvailable,
     canConfirm: pending && slotAvailable !== false,
     canReject: pending || technicalError,
