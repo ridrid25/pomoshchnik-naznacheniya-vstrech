@@ -544,6 +544,7 @@
       if (booking.status === 'PENDING_APPROVAL') actions.push(`<button class="primary-button" type="button" data-admin-action="confirm" data-admin-id="${escapeHtml(booking.id)}">Подтвердить</button>`);
       actions.push(`<button class="danger-button" type="button" data-admin-action="reject" data-admin-id="${escapeHtml(booking.id)}">Отклонить</button>`);
     } else {
+      if (booking.canRetry) actions.push(`<button class="primary-button" type="button" data-retry-id="${escapeHtml(booking.id)}">Выбрать другое время</button>`);
       if (booking.canReschedule) actions.push(`<button class="secondary-button" type="button" data-reschedule-id="${escapeHtml(booking.id)}">Перенести</button>`);
       if (booking.canCancel) actions.push(`<button class="danger-button" type="button" data-cancel-id="${escapeHtml(booking.id)}">Отменить</button>`);
     }
@@ -553,6 +554,22 @@
 
   function startReschedule(booking) {
     state.rescheduleOriginal = booking;
+    state.idempotencyKey = newIdempotencyKey();
+    state.duration = String(booking.durationMinutes);
+    state.format = booking.meetingFormat === 'ONLINE' ? 'Онлайн' : 'Личная';
+    state.weekIndex = 0; state.date = null; state.slot = null;
+    $('meetingTitle').value = booking.title;
+    $('meetingComment').value = booking.comment || '';
+    $('meetingEmail').value = booking.email || state.user?.lastConfirmedEmail || '';
+    $('calendarInvite').checked = Boolean($('meetingEmail').value);
+    syncWizardChoices();
+    state.history = ['booking-detail'];
+    void setWizardStep(2);
+    showScreen('wizard', { fromHistory: true });
+  }
+
+  function retryUnavailableBooking(booking) {
+    state.rescheduleOriginal = null;
     state.idempotencyKey = newIdempotencyKey();
     state.duration = String(booking.durationMinutes);
     state.format = booking.meetingFormat === 'ONLINE' ? 'Онлайн' : 'Личная';
@@ -1017,6 +1034,13 @@
         ? state.selectedBooking
         : state.bookingsByScope.active.find((item) => item.id === button.dataset.rescheduleId);
       if (booking) startReschedule(booking);
+      return;
+    }
+    if (button.dataset.retryId) {
+      const booking = state.selectedBooking?.id === button.dataset.retryId
+        ? state.selectedBooking
+        : state.bookingsByScope.archive.find((item) => item.id === button.dataset.retryId);
+      if (booking) retryUnavailableBooking(booking);
       return;
     }
     if (button.dataset.action) showToast('Действие появится на следующем этапе');

@@ -307,6 +307,7 @@ function toUserBookingContract(
       booking.status === BookingStatus.PENDING_APPROVAL ||
       (booking.status === BookingStatus.CONFIRMED && inFuture),
     canReschedule: booking.status === BookingStatus.CONFIRMED && inFuture,
+    canRetry: booking.status === BookingStatus.SLOT_UNAVAILABLE,
     createdAt: booking.createdAt.toISOString(),
     updatedAt: booking.updatedAt.toISOString(),
   };

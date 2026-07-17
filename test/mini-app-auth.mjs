@@ -329,6 +329,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     );
     assert.equal(bookingDetail.status, 200);
     const bookingDetailBody = await bookingDetail.json();
+    assert.equal(bookingDetailBody.booking.canRetry, false);
     assert.equal(bookingDetailBody.booking.canCancel, true);
     assert.equal(bookingDetailBody.booking.googleCalendarDayUrl, null);
 
@@ -471,6 +472,25 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     const repeatedCancelBody = await repeatedCancel.json();
     assert.equal(repeatedCancelBody.changed, false);
     assert.equal(repeatedCancelBody.booking.status, 'CANCELLED_BY_USER');
+
+    const unavailableDatabase = new Database(databasePath);
+    try {
+      unavailableDatabase.prepare(
+        "UPDATE Booking SET status = 'SLOT_UNAVAILABLE' WHERE id = ?",
+      ).run(firstBookingBody.booking.id);
+    } finally {
+      unavailableDatabase.close();
+    }
+    const unavailableUserDetail = await fetch(
+      `${origin}/api/mini-app/v1/bookings/${firstBookingBody.booking.id}`,
+      { headers: { cookie: regularCookie } },
+    );
+    assert.equal(unavailableUserDetail.status, 200);
+    const unavailableUserBooking = (await unavailableUserDetail.json()).booking;
+    assert.equal(unavailableUserBooking.status, 'SLOT_UNAVAILABLE');
+    assert.equal(unavailableUserBooking.canRetry, true);
+    assert.equal(unavailableUserBooking.canCancel, false);
+    assert.equal(unavailableUserBooking.canReschedule, false);
 
     const archiveList = await fetch(
       `${origin}/api/mini-app/v1/bookings?scope=archive`,

@@ -54,6 +54,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /renderCalendarReviewCard/u);
   assert.match(javascript, /renderAdminSlotState/u);
   assert.match(javascript, /booking\.slotAvailable === false/u);
+  assert.match(javascript, /booking\.canRetry/u);
+  assert.match(javascript, /data-retry-id/u);
+  assert.match(javascript, /Выбрать другое время/u);
+  assert.match(javascript, /retryUnavailableBooking/u);
   assert.match(javascript, /Время свободно — можно подтверждать/u);
   assert.match(javascript, /Время уже занято — подтверждение недоступно/u);
   assert.match(javascript, /соседней вкладке[^\n]+«Запись на встречу»/u);

@@ -74,12 +74,13 @@ export interface MiniAppUserBookingContract {
   calendarSyncStatus: 'PENDING' | 'SYNCED' | 'CANCELLED' | 'ERROR' | null;
   canCancel: boolean;
   canReschedule: boolean;
+  canRetry: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface MiniAppAdminBookingContract
-  extends Omit<MiniAppUserBookingContract, 'canCancel' | 'canReschedule'> {
+  extends Omit<MiniAppUserBookingContract, 'canCancel' | 'canReschedule' | 'canRetry'> {
   user: {
     id: string;
     telegramId: string;
