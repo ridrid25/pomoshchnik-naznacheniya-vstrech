@@ -1180,6 +1180,17 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .restriction-card h3 { font-size: 13px; }
 .restriction-card p { margin-top: 4px; color: var(--text-soft); font-size: 10px; line-height: 1.35; }
 .restriction-card > button { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-size: 19px; }
+.blocked-users-note { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; padding: 15px; border: 1px solid color-mix(in srgb, var(--danger) 18%, var(--line)); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--surface), color-mix(in srgb, var(--danger-soft) 45%, var(--surface-solid))); box-shadow: var(--shadow-soft); }
+.blocked-users-note .metric-icon { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 13px; }
+.blocked-users-note h2 { font-size: 14px; }
+.blocked-users-note p { margin-top: 4px; color: var(--text-soft); font-size: 10px; line-height: 1.45; }
+.blocked-users-list { display: grid; gap: 10px; }
+.blocked-user-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 11px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-soft); }
+.blocked-user-icon { display: grid; width: 45px; height: 45px; place-items: center; border-radius: 15px; background: var(--danger-soft); color: var(--danger); font-size: 16px; font-weight: 800; }
+.blocked-user-card h3 { font-size: 13px; }
+.blocked-user-card p { margin-top: 3px; color: var(--text-soft); font-size: 9px; line-height: 1.35; }
+.blocked-user-card small { display: block; margin-top: 5px; color: var(--danger); font-size: 9px; line-height: 1.35; }
+.blocked-user-card > button { grid-column: 1 / -1; min-height: 40px; }
 .approval-card { margin-bottom: 12px; }
 .admin-queue { display: grid; gap: 12px; }
 .admin-queue .approval-card { margin-bottom: 0; }

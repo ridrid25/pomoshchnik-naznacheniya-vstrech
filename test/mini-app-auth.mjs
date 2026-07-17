@@ -580,6 +580,43 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(blockedBody.decision.outcome, 'BLOCKED');
     assert.equal(blockedBody.booking.user.status, 'BANNED');
     assert.equal(blockedBody.booking.status, 'REJECTED');
+    const forbiddenBlockedUsers = await fetch(
+      `${origin}/api/mini-app/v1/admin/blocked-users`,
+      { headers: { cookie: regularCookie } },
+    );
+    assert.equal(forbiddenBlockedUsers.status, 403);
+    const blockedUsers = await fetch(
+      `${origin}/api/mini-app/v1/admin/blocked-users`,
+      { headers: { cookie } },
+    );
+    assert.equal(blockedUsers.status, 200);
+    const blockedUsersBody = await blockedUsers.json();
+    const blockedUser = blockedUsersBody.users.find(
+      (user) => user.userId === blockedBody.booking.user.id,
+    );
+    assert.ok(blockedUser);
+    assert.equal(blockedUser.displayName, 'Мария Соколова');
+    assert.equal(blockedUser.reason, 'Нежелательные заявки');
+    const wrongUnblockOrigin = await fetch(
+      `${origin}/api/mini-app/v1/admin/blocked-users/${blockedUser.userId}/unblock`,
+      { method: 'POST', headers: { cookie, origin: 'https://attacker.example' } },
+    );
+    assert.equal(wrongUnblockOrigin.status, 403);
+    const unblockResponse = await fetch(
+      `${origin}/api/mini-app/v1/admin/blocked-users/${blockedUser.userId}/unblock`,
+      { method: 'POST', headers: { cookie, origin } },
+    );
+    assert.equal(unblockResponse.status, 200, await unblockResponse.clone().text());
+    assert.equal((await unblockResponse.json()).changed, true);
+    const repeatedUnblock = await fetch(
+      `${origin}/api/mini-app/v1/admin/blocked-users/${blockedUser.userId}/unblock`,
+      { method: 'POST', headers: { cookie, origin } },
+    ).then((response) => response.json());
+    assert.equal(repeatedUnblock.changed, false);
+    const restoredUser = await fetch(`${origin}/api/mini-app/v1/me`, {
+      headers: { cookie: blockUserCookie },
+    });
+    assert.equal(restoredUser.status, 200);
     const recentAdminQueue = await fetch(
       `${origin}/api/mini-app/v1/admin/bookings?scope=recent`,
       { headers: { cookie } },

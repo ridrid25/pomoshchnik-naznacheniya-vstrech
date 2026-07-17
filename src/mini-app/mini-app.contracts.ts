@@ -151,3 +151,12 @@ export interface MiniAppAdminRestrictionContract {
   comment: string | null;
   createdAt: string;
 }
+
+export interface MiniAppAdminBlockedUserContract {
+  id: string;
+  userId: string;
+  displayName: string;
+  username: string | null;
+  reason: string | null;
+  blockedAt: string;
+}

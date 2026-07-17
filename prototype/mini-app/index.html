@@ -305,7 +305,7 @@
             <div class="settings-section-head"><div><p class="eyebrow">Следующие разделы</p><h2 id="adminToolsTitle">Контроль записей</h2></div></div>
             <div class="admin-tool-metrics">
               <button type="button" data-nav="admin-restrictions"><span class="metric-icon warm">◷</span><strong id="restrictionCount">0</strong><small>Закрытые даты</small></button>
-              <div><span class="metric-icon coral">!</span><strong id="blockedUserCount">0</strong><small>Заблокированы</small></div>
+              <button type="button" data-nav="admin-blocked-users"><span class="metric-icon coral">!</span><strong id="blockedUserCount">0</strong><small>Заблокированы</small></button>
               <div><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></div>
             </div>
             <p>Закрытые даты уже доступны. Управление пользователями и текстами добавим следующими блоками.</p>
@@ -334,6 +334,17 @@
         <div class="restriction-list-head"><div><p class="eyebrow">Будущие ограничения</p><h2>Недоступное время</h2></div><span id="restrictionListCount">0</span></div>
         <p class="availability-state" id="restrictionsState" role="status">Загружаем ограничения…</p>
         <div class="restriction-list" id="restrictionList"></div>
+      </section>
+
+      <section class="screen" data-screen="admin-blocked-users" aria-labelledby="adminBlockedUsersTitle">
+        <div class="page-heading">
+          <div><p class="eyebrow">Центр управления</p><h1 id="adminBlockedUsersTitle">Заблокированные</h1></div>
+          <span class="format-chip personal">Доступ</span>
+        </div>
+        <article class="blocked-users-note"><span class="metric-icon coral">!</span><div><h2>Контроль доступа</h2><p>Блокировка создаётся только из конкретной заявки. Здесь пользователя можно безопасно разблокировать.</p></div></article>
+        <div class="restriction-list-head"><div><p class="eyebrow">Активные блокировки</p><h2>Пользователи без доступа</h2></div><span id="blockedUsersListCount">0</span></div>
+        <p class="availability-state" id="blockedUsersState" role="status">Загружаем список…</p>
+        <div class="blocked-users-list" id="blockedUsersList"></div>
       </section>
 
       <nav class="bottom-nav" aria-label="Основная навигация">

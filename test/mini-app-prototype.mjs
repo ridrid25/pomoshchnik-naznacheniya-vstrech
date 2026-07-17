@@ -12,7 +12,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   const css = readFileSync(resolve(prototypeRoot, 'styles.css'), 'utf8');
   const javascript = readFileSync(resolve(prototypeRoot, 'app.js'), 'utf8');
 
-  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings', 'admin-restrictions']) {
+  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings', 'admin-restrictions', 'admin-blocked-users']) {
     assert.match(html, new RegExp(`data-screen="${screen}"`, 'u'));
   }
   assert.match(html, /Запись на встречу/u);
@@ -102,6 +102,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(html, /Закрытые даты/u);
   assert.match(html, /Убрать время из записи/u);
   assert.match(css, /restriction-card/u);
+  assert.match(javascript, /admin\/blocked-users/u);
+  assert.match(javascript, /loadBlockedUsers/u);
+  assert.match(javascript, /unblockUser/u);
+  assert.match(html, /Контроль доступа/u);
+  assert.match(html, /Пользователи без доступа/u);
+  assert.match(css, /blocked-user-card/u);
   assert.doesNotMatch(javascript, /серые заявки/iu);
 });
 

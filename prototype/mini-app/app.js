@@ -39,6 +39,7 @@
     restrictionTimeFields: $('restrictionTimeFields'), restrictionStartTime: $('restrictionStartTime'), restrictionEndTime: $('restrictionEndTime'),
     restrictionComment: $('restrictionComment'), saveRestriction: $('saveRestriction'), restrictionList: $('restrictionList'),
     restrictionsState: $('restrictionsState'), restrictionListCount: $('restrictionListCount'),
+    blockedUsersList: $('blockedUsersList'), blockedUsersState: $('blockedUsersState'), blockedUsersListCount: $('blockedUsersListCount'),
     scrollControls: $('scrollControls'), scrollUp: $('scrollUp'), scrollDown: $('scrollDown'),
   };
 
@@ -54,6 +55,7 @@
     adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null, reliability: null },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
     restrictions: [], pendingRestrictionDeleteId: null,
+    blockedUsers: [], pendingUnblockUserId: null,
   };
 
   const stepCopy = {
@@ -152,7 +154,7 @@
       screen.classList.toggle('is-active', active);
       screen.setAttribute('aria-hidden', String(!active));
     });
-    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-restrictions';
+    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-restrictions' || name === 'admin-blocked-users';
     elements.bottomNav.classList.toggle('is-hidden', flow);
     elements.back.classList.toggle('is-hidden', !flow);
     if (tg) flow ? tg.BackButton.show() : tg.BackButton.hide();
@@ -168,6 +170,7 @@
     if (name === 'admin') void loadAdminQueue();
     if (name === 'admin-settings') void loadAdminSettings();
     if (name === 'admin-restrictions') void loadRestrictions();
+    if (name === 'admin-blocked-users') void loadBlockedUsers();
     scrollTo({ top: 0, behavior: 'smooth' });
     requestAnimationFrame(updateScrollControls);
   }
@@ -808,6 +811,67 @@
     }
   }
 
+  async function loadBlockedUsers() {
+    if (state.user?.role !== 'ADMIN') return;
+    elements.blockedUsersState.textContent = 'Загружаем список…';
+    elements.blockedUsersState.classList.remove('is-hidden');
+    elements.blockedUsersList.replaceChildren();
+    try {
+      state.blockedUsers = (await api('/admin/blocked-users')).users;
+      renderBlockedUsers();
+    } catch (error) {
+      elements.blockedUsersState.textContent = error.message || 'Не удалось загрузить пользователей';
+    }
+  }
+
+  function renderBlockedUsers() {
+    elements.blockedUsersListCount.textContent = state.blockedUsers.length;
+    elements.blockedUserCount.textContent = state.blockedUsers.length;
+    elements.blockedUsersList.innerHTML = state.blockedUsers.map((user) => {
+      const account = user.username ? `@${user.username}` : 'Без username';
+      const blockedAt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(user.blockedAt));
+      return `<article class="blocked-user-card"><div class="blocked-user-icon">${escapeHtml((user.displayName || '?').slice(0, 1).toUpperCase())}</div><div><h3>${escapeHtml(user.displayName)}</h3><p>${escapeHtml(account)} · заблокирован ${escapeHtml(blockedAt)}</p>${user.reason ? `<small>Причина: ${escapeHtml(user.reason)}</small>` : ''}</div><button class="outline-button" type="button" data-unblock-user-id="${escapeHtml(user.userId)}" data-unblock-user-name="${escapeHtml(user.displayName)}">Разблокировать</button></article>`;
+    }).join('');
+    elements.blockedUsersState.textContent = state.blockedUsers.length ? '' : 'Заблокированных пользователей нет';
+    elements.blockedUsersState.classList.toggle('is-hidden', state.blockedUsers.length > 0);
+  }
+
+  function askUnblockUser(userId, displayName) {
+    state.pendingUnblockUserId = userId;
+    state.pendingRestrictionDeleteId = null;
+    state.pendingAdminAction = null;
+    state.pendingCancelId = null;
+    elements.modalTitle.textContent = 'Разблокировать пользователя?';
+    elements.modalText.textContent = `${displayName} снова сможет открывать Mini App и отправлять заявки.`;
+    elements.modalIcon.textContent = '✓';
+    elements.modalReasonBlock.classList.add('is-hidden');
+    elements.modalClose.classList.add('is-hidden');
+    elements.modalConfirmActions.classList.remove('is-hidden');
+    elements.modalConfirm.className = 'primary-button';
+    elements.modalConfirm.textContent = 'Разблокировать';
+    elements.modalCancel.textContent = 'Назад';
+    elements.modal.classList.remove('is-hidden');
+    elements.modalCancel.focus();
+  }
+
+  async function unblockUser() {
+    const userId = state.pendingUnblockUserId;
+    if (!userId) return;
+    elements.modalConfirm.disabled = true;
+    elements.modalConfirm.textContent = 'Сохраняем…';
+    try {
+      await api(`/admin/blocked-users/${encodeURIComponent(userId)}/unblock`, { method: 'POST' });
+      closeModal();
+      await loadBlockedUsers();
+      showToast('Пользователь разблокирован');
+      tg?.HapticFeedback?.notificationOccurred('success');
+    } catch (error) {
+      showToast(error.message || 'Не удалось разблокировать пользователя');
+    } finally {
+      elements.modalConfirm.disabled = false;
+    }
+  }
+
   async function loadAdminQueue() {
     if (state.user?.role !== 'ADMIN') return;
     elements.adminQueueState.textContent = 'Загружаем очередь…';
@@ -1113,6 +1177,7 @@
     state.pendingCancelId = null;
     state.pendingAdminAction = null;
     state.pendingRestrictionDeleteId = null;
+    state.pendingUnblockUserId = null;
     elements.modalReasonBlock.classList.add('is-hidden');
     elements.modalReason.value = '';
     elements.modal.classList.add('is-hidden');
@@ -1153,6 +1218,7 @@
     }
     if (button.dataset.adminBookingId) { void openAdminBooking(button.dataset.adminBookingId); return; }
     if (button.dataset.deleteRestrictionId) { askDeleteRestriction(button.dataset.deleteRestrictionId); return; }
+    if (button.dataset.unblockUserId) { askUnblockUser(button.dataset.unblockUserId, button.dataset.unblockUserName || 'Пользователь'); return; }
     if (button.dataset.calendarUrl) { openCalendarDay(button.dataset.calendarUrl); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
@@ -1211,7 +1277,8 @@
   elements.modalClose.addEventListener('click', closeModal);
   elements.modalCancel.addEventListener('click', closeModal);
   elements.modalConfirm.addEventListener('click', () => {
-    if (state.pendingRestrictionDeleteId) void deleteRestriction();
+    if (state.pendingUnblockUserId) void unblockUser();
+    else if (state.pendingRestrictionDeleteId) void deleteRestriction();
     else if (state.pendingAdminAction) void executeAdminDecision();
     else void cancelSelectedBooking();
   });
