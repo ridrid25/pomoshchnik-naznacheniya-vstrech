@@ -306,7 +306,7 @@
             <div class="admin-tool-metrics">
               <button type="button" data-nav="admin-restrictions"><span class="metric-icon warm">◷</span><strong id="restrictionCount">0</strong><small>Закрытые даты</small></button>
               <button type="button" data-nav="admin-blocked-users"><span class="metric-icon coral">!</span><strong id="blockedUserCount">0</strong><small>Заблокированы</small></button>
-              <div><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></div>
+              <button type="button" data-nav="admin-templates"><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></button>
             </div>
             <p>Закрытые даты уже доступны. Управление пользователями и текстами добавим следующими блоками.</p>
           </section>
@@ -345,6 +345,33 @@
         <div class="restriction-list-head"><div><p class="eyebrow">Активные блокировки</p><h2>Пользователи без доступа</h2></div><span id="blockedUsersListCount">0</span></div>
         <p class="availability-state" id="blockedUsersState" role="status">Загружаем список…</p>
         <div class="blocked-users-list" id="blockedUsersList"></div>
+      </section>
+
+      <section class="screen" data-screen="admin-templates" aria-labelledby="adminTemplatesTitle">
+        <div class="page-heading">
+          <div><p class="eyebrow">Центр управления</p><h1 id="adminTemplatesTitle">Шаблоны уведомлений</h1></div>
+          <span class="format-chip online">Тексты</span>
+        </div>
+        <article class="template-note"><span class="metric-icon teal">T</span><div><h2>Сообщения пользователям</h2><p>Выберите событие и отредактируйте текст. Доступные подстановки показаны внутри редактора.</p></div></article>
+        <div class="restriction-list-head"><div><p class="eyebrow">Все события</p><h2>Когда отправлять сообщение</h2></div><span id="templatesListCount">0</span></div>
+        <p class="availability-state" id="templatesState" role="status">Загружаем шаблоны…</p>
+        <div class="template-list" id="templateList"></div>
+      </section>
+
+      <section class="screen" data-screen="admin-template-editor" aria-labelledby="templateEditorTitle">
+        <div class="page-heading">
+          <div><p class="eyebrow">Шаблон уведомления</p><h1 id="templateEditorTitle">Редактирование</h1></div>
+          <span class="format-chip online">Telegram и Email</span>
+        </div>
+        <form class="template-editor" id="templateEditorForm">
+          <div class="settings-section-head"><div><p class="eyebrow">Текст сообщения</p><h2 id="templateEditorLabel">Уведомление</h2></div></div>
+          <label class="template-text-field"><span>Текст до 4000 символов</span><textarea id="templateEditorText" maxlength="4000" required></textarea></label>
+          <section class="placeholder-panel" aria-labelledby="placeholderTitle">
+            <div><h3 id="placeholderTitle">Допустимые подстановки</h3><p>Нажмите на подстановку, чтобы вставить её в текст.</p></div>
+            <div class="placeholder-list" id="templatePlaceholders"></div>
+          </section>
+          <button class="primary-button full-width" id="saveTemplate" type="submit">Сохранить шаблон</button>
+        </form>
       </section>
 
       <nav class="bottom-nav" aria-label="Основная навигация">

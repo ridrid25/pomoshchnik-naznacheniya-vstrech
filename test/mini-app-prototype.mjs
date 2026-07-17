@@ -12,7 +12,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   const css = readFileSync(resolve(prototypeRoot, 'styles.css'), 'utf8');
   const javascript = readFileSync(resolve(prototypeRoot, 'app.js'), 'utf8');
 
-  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings', 'admin-restrictions', 'admin-blocked-users']) {
+  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings', 'admin-restrictions', 'admin-blocked-users', 'admin-templates', 'admin-template-editor']) {
     assert.match(html, new RegExp(`data-screen="${screen}"`, 'u'));
   }
   assert.match(html, /Запись на встречу/u);
@@ -108,6 +108,14 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(html, /Контроль доступа/u);
   assert.match(html, /Пользователи без доступа/u);
   assert.match(css, /blocked-user-card/u);
+  assert.match(javascript, /admin\/templates/u);
+  assert.match(javascript, /loadTemplates/u);
+  assert.match(javascript, /saveTemplate/u);
+  assert.match(javascript, /data-insert-placeholder/u);
+  assert.match(html, /Шаблоны уведомлений/u);
+  assert.match(html, /Допустимые подстановки/u);
+  assert.match(css, /template-card/u);
+  assert.match(css, /placeholder-list/u);
   assert.doesNotMatch(javascript, /серые заявки/iu);
 });
 

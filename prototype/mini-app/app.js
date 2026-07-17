@@ -40,6 +40,9 @@
     restrictionComment: $('restrictionComment'), saveRestriction: $('saveRestriction'), restrictionList: $('restrictionList'),
     restrictionsState: $('restrictionsState'), restrictionListCount: $('restrictionListCount'),
     blockedUsersList: $('blockedUsersList'), blockedUsersState: $('blockedUsersState'), blockedUsersListCount: $('blockedUsersListCount'),
+    templateList: $('templateList'), templatesState: $('templatesState'), templatesListCount: $('templatesListCount'),
+    templateEditorForm: $('templateEditorForm'), templateEditorLabel: $('templateEditorLabel'), templateEditorText: $('templateEditorText'),
+    templatePlaceholders: $('templatePlaceholders'), saveTemplate: $('saveTemplate'),
     scrollControls: $('scrollControls'), scrollUp: $('scrollUp'), scrollDown: $('scrollDown'),
   };
 
@@ -56,6 +59,7 @@
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
     restrictions: [], pendingRestrictionDeleteId: null,
     blockedUsers: [], pendingUnblockUserId: null,
+    templates: [], selectedTemplate: null,
   };
 
   const stepCopy = {
@@ -154,7 +158,7 @@
       screen.classList.toggle('is-active', active);
       screen.setAttribute('aria-hidden', String(!active));
     });
-    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-restrictions' || name === 'admin-blocked-users';
+    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-restrictions' || name === 'admin-blocked-users' || name === 'admin-templates' || name === 'admin-template-editor';
     elements.bottomNav.classList.toggle('is-hidden', flow);
     elements.back.classList.toggle('is-hidden', !flow);
     if (tg) flow ? tg.BackButton.show() : tg.BackButton.hide();
@@ -171,6 +175,7 @@
     if (name === 'admin-settings') void loadAdminSettings();
     if (name === 'admin-restrictions') void loadRestrictions();
     if (name === 'admin-blocked-users') void loadBlockedUsers();
+    if (name === 'admin-templates') void loadTemplates();
     scrollTo({ top: 0, behavior: 'smooth' });
     requestAnimationFrame(updateScrollControls);
   }
@@ -872,6 +877,76 @@
     }
   }
 
+  async function loadTemplates() {
+    if (state.user?.role !== 'ADMIN') return;
+    elements.templatesState.textContent = 'Загружаем шаблоны…';
+    elements.templatesState.classList.remove('is-hidden');
+    elements.templateList.replaceChildren();
+    try {
+      state.templates = (await api('/admin/templates')).templates;
+      renderTemplates();
+    } catch (error) {
+      elements.templatesState.textContent = error.message || 'Не удалось загрузить шаблоны';
+    }
+  }
+
+  function renderTemplates() {
+    elements.templatesListCount.textContent = state.templates.length;
+    elements.templateCount.textContent = state.templates.length;
+    elements.templateList.innerHTML = state.templates.map((template) => {
+      const preview = template.text.replace(/\s+/gu, ' ').slice(0, 125);
+      const suffix = template.text.length > 125 ? '…' : '';
+      const variableCount = template.allowedPlaceholders.length;
+      return `<button class="template-card" type="button" data-template-type="${escapeHtml(template.type)}"><span class="template-card-icon">T</span><span><strong>${escapeHtml(template.label)}</strong><small>${escapeHtml(preview)}${suffix}</small><em>${variableCount ? `Подстановок: ${variableCount}` : 'Без подстановок'}</em></span><b aria-hidden="true">›</b></button>`;
+    }).join('');
+    elements.templatesState.textContent = state.templates.length ? '' : 'Шаблоны не найдены';
+    elements.templatesState.classList.toggle('is-hidden', state.templates.length > 0);
+  }
+
+  function openTemplateEditor(type) {
+    const template = state.templates.find((item) => item.type === type);
+    if (!template) return;
+    state.selectedTemplate = template;
+    elements.templateEditorLabel.textContent = template.label;
+    elements.templateEditorText.value = template.text;
+    elements.templatePlaceholders.innerHTML = template.allowedPlaceholders.length
+      ? template.allowedPlaceholders.map((placeholder) => `<button type="button" data-insert-placeholder="${escapeHtml(placeholder.name)}"><code>{${escapeHtml(placeholder.name)}}</code><span>${escapeHtml(placeholder.label)}</span></button>`).join('')
+      : '<p class="placeholder-empty">В этом сообщении подстановки не используются.</p>';
+    showScreen('admin-template-editor');
+  }
+
+  function insertPlaceholder(name) {
+    const token = `{${name}}`;
+    const textarea = elements.templateEditorText;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+    textarea.setRangeText(token, start, end, 'end');
+    textarea.focus();
+  }
+
+  async function saveTemplate(event) {
+    event.preventDefault();
+    const template = state.selectedTemplate;
+    if (!template) return;
+    elements.saveTemplate.disabled = true;
+    elements.saveTemplate.textContent = 'Сохраняем…';
+    try {
+      const payload = await api(`/admin/templates/${encodeURIComponent(template.type)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ text: elements.templateEditorText.value }),
+      });
+      state.selectedTemplate = payload.template;
+      state.templates = state.templates.map((item) => item.type === payload.template.type ? payload.template : item);
+      showToast('Шаблон сохранён');
+      tg?.HapticFeedback?.notificationOccurred('success');
+    } catch (error) {
+      showToast(error.message || 'Не удалось сохранить шаблон');
+    } finally {
+      elements.saveTemplate.disabled = false;
+      elements.saveTemplate.textContent = 'Сохранить шаблон';
+    }
+  }
+
   async function loadAdminQueue() {
     if (state.user?.role !== 'ADMIN') return;
     elements.adminQueueState.textContent = 'Загружаем очередь…';
@@ -1219,6 +1294,8 @@
     if (button.dataset.adminBookingId) { void openAdminBooking(button.dataset.adminBookingId); return; }
     if (button.dataset.deleteRestrictionId) { askDeleteRestriction(button.dataset.deleteRestrictionId); return; }
     if (button.dataset.unblockUserId) { askUnblockUser(button.dataset.unblockUserId, button.dataset.unblockUserName || 'Пользователь'); return; }
+    if (button.dataset.templateType) { openTemplateEditor(button.dataset.templateType); return; }
+    if (button.dataset.insertPlaceholder) { insertPlaceholder(button.dataset.insertPlaceholder); return; }
     if (button.dataset.calendarUrl) { openCalendarDay(button.dataset.calendarUrl); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
@@ -1263,6 +1340,7 @@
     .observe($('app'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   elements.scheduleSettingsForm.addEventListener('submit', saveAdminSchedule);
   elements.restrictionForm.addEventListener('submit', saveRestriction);
+  elements.templateEditorForm.addEventListener('submit', saveTemplate);
   elements.restrictionType.addEventListener('change', toggleRestrictionTimeFields);
   elements.back.addEventListener('click', goBack);
   elements.previous.addEventListener('click', () => setWizardStep(state.step - 1));

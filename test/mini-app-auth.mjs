@@ -691,6 +691,66 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(deleteRestriction.status, 200, await deleteRestriction.clone().text());
     assert.equal((await deleteRestriction.json()).deleted, true);
 
+    const forbiddenTemplates = await fetch(
+      `${origin}/api/mini-app/v1/admin/templates`,
+      { headers: { cookie: regularCookie } },
+    );
+    assert.equal(forbiddenTemplates.status, 403);
+    const templatesResponse = await fetch(
+      `${origin}/api/mini-app/v1/admin/templates`,
+      { headers: { cookie } },
+    );
+    assert.equal(templatesResponse.status, 200);
+    const templatesBody = await templatesResponse.json();
+    assert.equal(templatesBody.templates.length, 8);
+    const confirmedTemplate = templatesBody.templates.find(
+      (template) => template.type === 'BOOKING_CONFIRMED',
+    );
+    assert.ok(confirmedTemplate);
+    assert.ok(
+      confirmedTemplate.allowedPlaceholders.some(
+        (placeholder) => placeholder.name === 'date',
+      ),
+    );
+    const wrongTemplateOrigin = await fetch(
+      `${origin}/api/mini-app/v1/admin/templates/BOOKING_CONFIRMED`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin: 'https://attacker.example', 'content-type': 'application/json' },
+        body: JSON.stringify({ text: confirmedTemplate.text }),
+      },
+    );
+    assert.equal(wrongTemplateOrigin.status, 403);
+    const unknownPlaceholder = await fetch(
+      `${origin}/api/mini-app/v1/admin/templates/BOOKING_CONFIRMED`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Встреча {unknown_value}' }),
+      },
+    );
+    assert.equal(unknownPlaceholder.status, 400);
+    const editedTemplateText = 'Встреча подтверждена на {date} в {time} ({tz_label}).';
+    const editedTemplate = await fetch(
+      `${origin}/api/mini-app/v1/admin/templates/BOOKING_CONFIRMED`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: editedTemplateText }),
+      },
+    );
+    assert.equal(editedTemplate.status, 200, await editedTemplate.clone().text());
+    assert.equal((await editedTemplate.json()).template.text, editedTemplateText);
+    const restoredTemplate = await fetch(
+      `${origin}/api/mini-app/v1/admin/templates/BOOKING_CONFIRMED`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: confirmedTemplate.text }),
+      },
+    );
+    assert.equal(restoredTemplate.status, 200);
+
     const logoutResponse = await fetch(`${origin}/api/mini-app/v1/session`, {
       method: 'DELETE',
       headers: { cookie, origin },

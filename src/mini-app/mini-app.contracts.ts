@@ -160,3 +160,22 @@ export interface MiniAppAdminBlockedUserContract {
   reason: string | null;
   blockedAt: string;
 }
+
+export interface MiniAppAdminTemplateContract {
+  type:
+    | 'BOOKING_SUBMITTED'
+    | 'BOOKING_CONFIRMED'
+    | 'BOOKING_REJECTED'
+    | 'BOOKING_EXPIRED'
+    | 'BOOKING_CANCELLED'
+    | 'RESCHEDULE_SUBMITTED'
+    | 'SLOT_UNAVAILABLE'
+    | 'CONFIRMATION_ERROR';
+  label: string;
+  text: string;
+  allowedPlaceholders: Array<{
+    name: string;
+    label: string;
+  }>;
+  updatedAt: string;
+}
