@@ -67,6 +67,8 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(appResponse.status, 200);
     const appJavascript = await appResponse.text();
     assert.match(appJavascript, /idempotencyKey/u);
+    assert.match(appJavascript, /tgWebAppData/u);
+    assert.match(appJavascript, /telegramInitData/u);
     assert.doesNotMatch(appJavascript, /demo=1|enterDemo|demoBookings|createDemo/u);
 
     const withoutSession = await fetch(`${origin}/api/mini-app/v1/me`);

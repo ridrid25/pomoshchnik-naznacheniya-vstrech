@@ -4,6 +4,9 @@
   const body = document.body;
   const screens = [...document.querySelectorAll('[data-screen]')];
   const telegramWebApp = window.Telegram?.WebApp;
+  const telegramInitData = telegramWebApp?.initData
+    || new URLSearchParams(location.hash.startsWith('#') ? location.hash.slice(1) : location.hash).get('tgWebAppData')
+    || '';
   const tg = telegramWebApp?.initData ? telegramWebApp : null;
 
   const elements = {
@@ -115,8 +118,8 @@
       try {
         session = await api('/me');
       } catch (error) {
-        if (error.status !== 401 || !tg?.initData) throw error;
-        session = await api('/session', { method: 'POST', body: JSON.stringify({ initData: tg.initData }) });
+        if (error.status !== 401 || !telegramInitData) throw error;
+        session = await api('/session', { method: 'POST', body: JSON.stringify({ initData: telegramInitData }) });
       }
       state.user = session.user;
       $('meetingEmail').value = session.user.lastConfirmedEmail || '';

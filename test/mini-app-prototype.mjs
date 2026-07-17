@@ -39,6 +39,8 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /setWizardStep/u);
   assert.match(javascript, /availability\/slots/u);
   assert.match(javascript, /idempotencyKey/u);
+  assert.match(javascript, /tgWebAppData/u);
+  assert.match(javascript, /telegramInitData/u);
   assert.match(javascript, /BackButton/u);
   assert.match(javascript, /loadBookings/u);
   assert.match(javascript, /reschedule/u);
