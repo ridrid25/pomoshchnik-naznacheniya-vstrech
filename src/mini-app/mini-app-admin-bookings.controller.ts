@@ -22,6 +22,7 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import {
+  BookingSource,
   BookingStatus,
   UserStatus,
   type Prisma,
@@ -40,6 +41,10 @@ type AdminBooking = Prisma.BookingGetPayload<{
 }>;
 
 const AGING_AFTER_MS = 15 * 60_000;
+const M9_OBSERVATION_STARTED_AT = new Date('2026-07-17T14:01:24.000Z');
+const M9_MINIMUM_SAMPLE_SIZE = 5;
+const M8_BASELINE_SAMPLE_SIZE = 9;
+const M8_BASELINE_SLOT_UNAVAILABLE = 2;
 
 interface DecisionBody {
   reason?: unknown;
@@ -71,7 +76,15 @@ export class MiniAppAdminBookingsController {
     startOfToday.setHours(0, 0, 0, 0);
     const now = new Date();
     const agingCutoff = new Date(now.getTime() - AGING_AFTER_MS);
-    const [bookings, pending, decidedToday, aging, oldestPending] = await this.prisma.$transaction([
+    const [
+      bookings,
+      pending,
+      decidedToday,
+      aging,
+      oldestPending,
+      m9SampleSize,
+      m9SlotUnavailable,
+    ] = await this.prisma.$transaction([
       this.prisma.booking.findMany({
         where:
           scope === 'pending'
@@ -101,7 +114,24 @@ export class MiniAppAdminBookingsController {
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true },
       }),
+      this.prisma.booking.count({
+        where: {
+          source: BookingSource.MINI_APP,
+          createdAt: { gte: M9_OBSERVATION_STARTED_AT },
+        },
+      }),
+      this.prisma.booking.count({
+        where: {
+          source: BookingSource.MINI_APP,
+          createdAt: { gte: M9_OBSERVATION_STARTED_AT },
+          status: BookingStatus.SLOT_UNAVAILABLE,
+        },
+      }),
     ]);
+    const m9RatePercent = m9SampleSize
+      ? Math.round((m9SlotUnavailable / m9SampleSize) * 1_000) / 10
+      : null;
+    const comparison = compareReliability(m9SampleSize, m9SlotUnavailable);
     const bookingContracts = await Promise.all(
       bookings.map((booking) => this.toContract(booking, null, now)),
     );
@@ -114,6 +144,17 @@ export class MiniAppAdminBookingsController {
         oldestWaitingMinutes: oldestPending
           ? Math.max(0, Math.floor((now.getTime() - oldestPending.createdAt.getTime()) / 60_000))
           : null,
+        reliability: {
+          observationStartedAt: M9_OBSERVATION_STARTED_AT.toISOString(),
+          sampleSize: m9SampleSize,
+          minimumSampleSize: M9_MINIMUM_SAMPLE_SIZE,
+          slotUnavailable: m9SlotUnavailable,
+          ratePercent: m9RatePercent,
+          baselineSampleSize: M8_BASELINE_SAMPLE_SIZE,
+          baselineSlotUnavailable: M8_BASELINE_SLOT_UNAVAILABLE,
+          baselineRatePercent: 22,
+          comparison,
+        },
       },
     };
   }
@@ -199,6 +240,18 @@ export class MiniAppAdminBookingsController {
       booking.id,
     );
   }
+}
+
+function compareReliability(
+  sampleSize: number,
+  slotUnavailable: number,
+): 'COLLECTING' | 'IMPROVED' | 'UNCHANGED' | 'WORSE' {
+  if (sampleSize < M9_MINIMUM_SAMPLE_SIZE) return 'COLLECTING';
+  const currentScaled = slotUnavailable * M8_BASELINE_SAMPLE_SIZE;
+  const baselineScaled = M8_BASELINE_SLOT_UNAVAILABLE * sampleSize;
+  if (currentScaled < baselineScaled) return 'IMPROVED';
+  if (currentScaled > baselineScaled) return 'WORSE';
+  return 'UNCHANGED';
 }
 
 function parseScope(value: string | undefined): 'pending' | 'recent' {

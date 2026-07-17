@@ -102,6 +102,17 @@ export interface MiniAppAdminQueueSummaryContract {
   decidedToday: number;
   aging: number;
   oldestWaitingMinutes: number | null;
+  reliability: {
+    observationStartedAt: string;
+    sampleSize: number;
+    minimumSampleSize: number;
+    slotUnavailable: number;
+    ratePercent: number | null;
+    baselineSampleSize: number;
+    baselineSlotUnavailable: number;
+    baselineRatePercent: number;
+    comparison: 'COLLECTING' | 'IMPROVED' | 'UNCHANGED' | 'WORSE';
+  };
 }
 
 export interface MiniAppAdminSettingsContract {

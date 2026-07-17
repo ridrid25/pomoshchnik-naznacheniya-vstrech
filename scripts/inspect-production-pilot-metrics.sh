@@ -25,6 +25,15 @@ docker compose --env-file .env.production exec -T app node -e '
     FROM Booking
     WHERE source = ?
   `).get("MINI_APP");
+  const m9ObservationStartedAt = "2026-07-17T14:01:24.000Z";
+  const m9SampleSize = count(`
+    SELECT COUNT(*) AS count FROM Booking
+    WHERE source = ? AND createdAt >= ?
+  `, "MINI_APP", m9ObservationStartedAt);
+  const m9SlotUnavailable = count(`
+    SELECT COUNT(*) AS count FROM Booking
+    WHERE source = ? AND createdAt >= ? AND status = ?
+  `, "MINI_APP", m9ObservationStartedAt, "SLOT_UNAVAILABLE");
 
   const result = {
     event: "production.pilot.metrics",
@@ -54,6 +63,16 @@ docker compose --env-file .env.production exec -T app node -e '
     `, "MINI_APP"),
     observation_started_at: period.first_at || null,
     observation_last_booking_at: period.last_at || null,
+    m9_reliability: {
+      observation_started_at: m9ObservationStartedAt,
+      minimum_sample_size: 5,
+      sample_size: m9SampleSize,
+      slot_unavailable: m9SlotUnavailable,
+      rate_percent: m9SampleSize
+        ? Math.round((m9SlotUnavailable / m9SampleSize) * 1000) / 10
+        : null,
+      baseline: { sample_size: 9, slot_unavailable: 2, rate_percent: 22 },
+    },
   };
 
   db.close();

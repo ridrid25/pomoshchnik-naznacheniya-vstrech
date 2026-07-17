@@ -26,7 +26,7 @@
     modalConfirmActions: $('modalConfirmActions'), modalCancel: $('modalCancel'), modalConfirm: $('modalConfirm'),
     modalReasonBlock: $('modalReasonBlock'), modalReason: $('modalReason'),
     adminQueue: $('adminQueue'), adminQueueState: $('adminQueueState'), adminQueueCount: $('adminQueueCount'),
-    adminPendingCount: $('adminPendingCount'), adminDecidedToday: $('adminDecidedToday'), adminOldestWait: $('adminOldestWait'), adminNavCount: $('adminNavCount'),
+    adminPendingCount: $('adminPendingCount'), adminDecidedToday: $('adminDecidedToday'), adminOldestWait: $('adminOldestWait'), adminReliability: $('adminReliability'), adminNavCount: $('adminNavCount'),
     adminDetailCard: $('adminDetailCard'), adminDetailActions: $('adminDetailActions'),
     adminSettingsState: $('adminSettingsState'), adminSettingsContent: $('adminSettingsContent'),
     googleIntegrationCard: $('googleIntegrationCard'), scheduleSettingsForm: $('scheduleSettingsForm'),
@@ -47,7 +47,7 @@
     bookingsByScope: { active: [], archive: [] },
     selectedBooking: null, rescheduleOriginal: null, pendingCancelId: null,
     notificationChannel: 'TELEGRAM',
-    adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null },
+    adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null, reliability: null },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
   };
 
@@ -728,6 +728,7 @@
       ? 'Нет ожидания'
       : `${aging ? `${aging} требуют внимания · ` : ''}самая долгая ${formatWaitingTime(oldestWaitingMinutes)}`;
     elements.adminOldestWait.classList.toggle('is-aging', aging > 0);
+    renderReliability(state.adminSummary.reliability);
     elements.adminNavCount.textContent = pending;
     elements.adminNavCount.classList.toggle('is-hidden', pending === 0);
     elements.adminQueue.innerHTML = state.adminBookings.map(renderAdminCard).join('');
@@ -737,6 +738,31 @@
         ? 'Очередь пуста — все заявки обработаны'
         : 'Недавних решений пока нет';
     elements.adminQueueState.classList.toggle('is-hidden', state.adminBookings.length > 0);
+  }
+
+  function renderReliability(metric) {
+    if (!metric) {
+      elements.adminReliability.classList.add('is-hidden');
+      return;
+    }
+    const sampleSize = Math.max(0, Number(metric.sampleSize) || 0);
+    const minimum = Math.max(1, Number(metric.minimumSampleSize) || 5);
+    const remaining = Math.max(0, minimum - sampleSize);
+    const progress = Math.min(100, Math.round((sampleSize / minimum) * 100));
+    const collecting = metric.comparison === 'COLLECTING';
+    const result = collecting
+      ? `Нужно ещё ${remaining} ${plural(remaining, 'заявка', 'заявки', 'заявок')} для честного сравнения.`
+      : metric.comparison === 'IMPROVED'
+        ? 'Доля конфликтов стала ниже базовых 22%.'
+        : metric.comparison === 'WORSE'
+          ? 'Доля конфликтов выше базовых 22% — нужна дополнительная проверка.'
+          : 'Доля конфликтов осталась на уровне базовых 22%.';
+    const currentRate = metric.ratePercent === null ? 'Нет новых данных' : `${metric.ratePercent}% конфликтов`;
+    elements.adminReliability.className = `reliability-card ${collecting ? 'collecting' : metric.comparison.toLowerCase()}`;
+    elements.adminReliability.innerHTML = `
+      <div class="reliability-head"><div><p class="eyebrow">Контрольный пилот M9</p><h2>${collecting ? `${sampleSize} из ${minimum} заявок` : currentRate}</h2></div><span>${collecting ? 'Собираем' : escapeHtml(currentRate)}</span></div>
+      <div class="pilot-progress" aria-label="Собрано ${sampleSize} из ${minimum} заявок"><span style="width:${progress}%"></span></div>
+      <p>${escapeHtml(result)} Базовый пилот: 2 из 9, или 22%.</p>`;
   }
 
   function renderAdminCard(booking) {

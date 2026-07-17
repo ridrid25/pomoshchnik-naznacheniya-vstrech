@@ -66,6 +66,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /Ждёт решения/u);
   assert.match(css, /queue-age\.aging/u);
   assert.match(html, /id="adminOldestWait"/u);
+  assert.match(html, /id="adminReliability"/u);
+  assert.match(javascript, /renderReliability/u);
+  assert.match(javascript, /Контрольный пилот M9/u);
+  assert.match(javascript, /Базовый пилот: 2 из 9, или 22%/u);
+  assert.match(css, /reliability-card/u);
+  assert.match(css, /pilot-progress/u);
   assert.match(javascript, /соседней вкладке[^\n]+«Запись на встречу»/u);
   assert.match(javascript, /бледную плашку «На согласовании»/u);
   assert.doesNotMatch(javascript, /demo=1|enterDemo|demoBookings|createDemo|toDemo|state\.mode/iu);

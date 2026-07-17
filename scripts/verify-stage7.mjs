@@ -128,6 +128,8 @@ for (const marker of [
   'mini_app_bookings',
   'unique_mini_app_users',
   'pending_calendar_markers',
+  'm9_reliability',
+  'minimum_sample_size',
 ]) {
   assert.ok(
     pilotMetrics.includes(marker),

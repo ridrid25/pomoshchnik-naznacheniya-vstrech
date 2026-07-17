@@ -309,6 +309,12 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.ok(adminQueueBody.summary.pending >= 1);
     assert.ok(adminQueueBody.summary.aging >= 1);
     assert.ok(adminQueueBody.summary.oldestWaitingMinutes >= 19);
+    assert.ok(adminQueueBody.summary.reliability.sampleSize >= 1);
+    assert.equal(adminQueueBody.summary.reliability.minimumSampleSize, 5);
+    assert.equal(adminQueueBody.summary.reliability.baselineSampleSize, 9);
+    assert.equal(adminQueueBody.summary.reliability.baselineSlotUnavailable, 2);
+    assert.equal(adminQueueBody.summary.reliability.baselineRatePercent, 22);
+    assert.equal(adminQueueBody.summary.reliability.comparison, 'COLLECTING');
     const adminDetail = await fetch(
       `${origin}/api/mini-app/v1/admin/bookings/${firstBookingBody.booking.id}`,
       { headers: { cookie } },
