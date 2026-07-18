@@ -467,7 +467,7 @@
     $('successCode').textContent = rescheduled ? 'Перенос встречи' : 'Заявка отправлена';
     $('successTitle').textContent = rescheduled ? 'Перенос отправлен' : 'Отправлено на согласование';
     $('successText').textContent = rescheduled
-      ? 'Старая встреча остаётся действующей, пока администратор не подтвердит новое время.'
+      ? 'Старая встреча остаётся действующей, пока новое время не будет подтверждено.'
       : 'Сообщим о решении в Telegram. Время временно закреплено за вами.';
     $('successDate').textContent = `${formatLongDate(state.date || booking.startAt.slice(0, 10))} · ${state.slot.time}`;
     $('successMeta').textContent = `${booking.durationMinutes} минут · ${booking.meetingFormat === 'ONLINE' ? 'Онлайн' : 'Личная'}`;
@@ -675,7 +675,7 @@
     elements.googleIntegrationCard.className = `integration-status-card ${connected ? 'is-connected' : 'needs-attention'}`;
     elements.googleIntegrationCard.innerHTML = `
       <div class="integration-status-head"><span class="integration-logo"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span><div><p class="eyebrow">Google Calendar</p><h2>${connected ? 'Календарь подключён' : 'Нужно подключение'}</h2></div><span class="integration-dot" aria-hidden="true"></span></div>
-      <p>${connected ? 'Свободные окна, заявки и подтверждённые встречи синхронизируются автоматически.' : 'Проверьте OAuth-настройки в Telegram-разделе администратора.'}</p>
+      <p>${connected ? 'Свободные окна, заявки и подтверждённые встречи синхронизируются автоматически.' : 'Проверьте подключение Google Calendar в Telegram-боте.'}</p>
       <div class="integration-account"><span>Аккаунт</span><strong>${escapeHtml(google.accountEmail || 'Не определён')}</strong></div>`;
     const schedule = settings.schedule;
     elements.scheduleTimezone.value = schedule.timezone;
@@ -702,14 +702,14 @@
       const enabled = periods.length > 0;
       const ranges = periods.map((period, index) => `
         <div class="work-period-row">
-          <label><span>С</span><input type="time" step="900" value="${minuteTimeInput(period.startMinute)}" data-period-field="startMinute" data-period-weekday="${weekday}" data-period-index="${index}" aria-label="${dayNames[weekday]}: начало интервала ${index + 1}"></label>
+          <label><span>Начало</span><input type="time" lang="ru-RU" step="900" value="${minuteTimeInput(period.startMinute)}" data-period-field="startMinute" data-period-weekday="${weekday}" data-period-index="${index}" aria-label="${dayNames[weekday]}: начало интервала ${index + 1}"></label>
           <span class="work-period-dash">—</span>
-          <label><span>До</span><input type="time" step="900" value="${minuteTimeInput(period.endMinute)}" data-period-field="endMinute" data-period-weekday="${weekday}" data-period-index="${index}" aria-label="${dayNames[weekday]}: конец интервала ${index + 1}"></label>
-          <button class="remove-work-period" type="button" data-remove-work-period="${weekday}:${index}" aria-label="Удалить интервал ${index + 1} в день ${dayNames[weekday]}">×</button>
+          <label><span>Конец</span><input type="time" lang="ru-RU" step="900" value="${minuteTimeInput(period.endMinute)}" data-period-field="endMinute" data-period-weekday="${weekday}" data-period-index="${index}" aria-label="${dayNames[weekday]}: конец интервала ${index + 1}"></label>
+          <button class="remove-work-period" type="button" data-remove-work-period="${weekday}:${index}" aria-label="Удалить интервал ${index + 1} в день ${dayNames[weekday]}">Удалить</button>
         </div>`).join('');
-      return `<article class="week-day-card ${enabled ? 'is-enabled' : ''}">
-        <button class="week-day-toggle" type="button" data-toggle-weekday="${weekday}" aria-pressed="${enabled}"><span class="day-switch" aria-hidden="true"><i></i></span><span><strong>${dayNames[weekday]}</strong><small>${enabled ? periods.map((period) => `${minuteTime(period.startMinute)}–${minuteTime(period.endMinute)}`).join(', ') : 'Выходной'}</small></span></button>
-        <div class="work-period-list ${enabled ? '' : 'is-hidden'}">${ranges}<button class="add-work-period" type="button" data-add-work-period="${weekday}" ${periods.length >= 4 ? 'disabled' : ''}>+ Добавить интервал</button></div>
+      return `<article class="week-day-card ${enabled ? 'is-enabled' : ''}" data-weekday="${weekday}">
+        <button class="week-day-toggle" type="button" data-toggle-weekday="${weekday}" aria-pressed="${enabled}"><span class="day-switch" aria-hidden="true"><i></i></span><span><strong>${dayNames[weekday]}</strong><small>${enabled ? `Запись открыта · ${periods.map((period) => `${minuteTime(period.startMinute)}–${minuteTime(period.endMinute)}`).join(', ')}` : 'Запись закрыта · выходной'}</small></span></button>
+        <div class="work-period-list ${enabled ? '' : 'is-hidden'}">${ranges}<button class="add-work-period" type="button" data-add-work-period="${weekday}" ${periods.length >= 4 ? 'disabled' : ''}>+ Добавить ещё время</button></div>
       </article>`;
     }).join('');
   }
@@ -785,7 +785,7 @@
     if (!period || minutes === null || (field !== 'startMinute' && field !== 'endMinute')) return;
     period[field] = minutes;
     const summary = input.closest('.week-day-card')?.querySelector('.week-day-toggle small');
-    if (summary) summary.textContent = dayPeriods.map((item) => `${minuteTime(item.startMinute)}–${minuteTime(item.endMinute)}`).join(', ');
+    if (summary) summary.textContent = `Запись открыта · ${dayPeriods.map((item) => `${minuteTime(item.startMinute)}–${minuteTime(item.endMinute)}`).join(', ')}`;
   }
 
   function validateWorkingPeriods() {
@@ -1261,7 +1261,7 @@
         BLOCKED: ['Пользователь заблокирован', 'Заявка отклонена, новые заявки этого аккаунта не принимаются.', '!'],
         SLOT_UNAVAILABLE: ['Время уже занято', 'Заявка закрыта без создания события. Предложите пользователю выбрать другое время.', '!'],
         CONFIRMATION_ERROR: ['Ошибка Google Calendar', 'Заявка сохранена с технической ошибкой. Её можно открыть и безопасно отклонить.', '!'],
-        ALREADY_PROCESSED: ['Заявка уже обработана', 'Другой администратор успел раньше. Показан актуальный результат.', 'i'],
+        ALREADY_PROCESSED: ['Заявка уже обработана', 'Решение по этой заявке уже принято. Показан актуальный результат.', 'i'],
       };
       const message = messages[result.decision.outcome] || ['Решение сохранено', 'Очередь обновлена.', '✓'];
       closeModal();

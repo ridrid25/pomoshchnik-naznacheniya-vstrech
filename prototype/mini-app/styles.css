@@ -26,10 +26,10 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-viewport-height: 100vh;
-  --type-caption: 12px;
-  --type-small: 13px;
-  --type-body: 15px;
-  --type-control: 16px;
+  --type-caption: 13px;
+  --type-small: 14px;
+  --type-body: 16px;
+  --type-control: 17px;
 }
 
 html[data-theme="dark"] {
@@ -183,13 +183,19 @@ h3 {
 }
 
 .topbar {
-  position: relative;
-  z-index: 10;
+  position: sticky;
+  top: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
   min-height: 78px;
   gap: 12px;
-  padding: 14px 0 10px;
+  margin: 0 -18px 12px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .brand-block {
@@ -248,6 +254,19 @@ h3 {
   height: 42px;
   border-radius: 14px;
 }
+
+.back-button {
+  width: auto;
+  min-width: 82px;
+  padding: 0 13px 0 10px;
+  grid-template-columns: auto auto;
+  gap: 5px;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.back-button svg { width: 20px; height: 20px; }
 
 .mini-icon-button {
   width: 36px;
@@ -1151,28 +1170,35 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .timezone-select { display: grid; min-width: 154px; gap: 4px; color: var(--text-soft); font-size: 8px; text-align: right; }
 .timezone-select select { width: 100%; min-height: 34px; padding: 0 25px 0 9px; border: 1px solid color-mix(in srgb, var(--teal) 22%, var(--line)); border-radius: 12px; background: var(--teal-soft); color: var(--teal); font-size: 9px; font-weight: 600; }
 .week-schedule-editor { margin: 15px 0; padding: 14px; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line)); border-radius: 17px; background: linear-gradient(145deg, var(--surface-soft), color-mix(in srgb, var(--primary) 5%, var(--surface-solid))); }
-.week-schedule-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.week-schedule-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .week-schedule-head h3 { margin-top: 3px; font-size: 14px; }
-.week-schedule-head > span { padding: 5px 8px; border-radius: 9px; background: var(--teal-soft); color: var(--teal); font-size: 8px; font-weight: 750; white-space: nowrap; }
+.week-schedule-head > span { max-width: 150px; padding: 7px 10px; border-radius: 11px; background: var(--teal-soft); color: var(--teal); font-size: 11px; font-weight: 750; line-height: 1.3; text-align: center; }
 .week-schedule-help { margin-top: 7px; color: var(--text-soft); font-size: 9px; line-height: 1.45; }
 .working-periods { display: grid; gap: 8px; margin-top: 12px; }
-.week-day-card { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-solid); transition: border-color 160ms ease, box-shadow 160ms ease; }
-.week-day-card.is-enabled { border-color: color-mix(in srgb, var(--primary) 24%, var(--line)); box-shadow: 0 7px 18px color-mix(in srgb, var(--primary) 6%, transparent); }
-.week-day-toggle { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 9px 11px; color: var(--text); text-align: left; }
+.week-day-card { --day-accent: var(--primary); overflow: hidden; border: 1px solid color-mix(in srgb, var(--day-accent) 25%, var(--line)); border-radius: 16px; background: var(--surface-solid); transition: border-color 160ms ease, box-shadow 160ms ease; }
+.week-day-card:nth-child(1) { --day-accent: #6759e8; }
+.week-day-card:nth-child(2) { --day-accent: #0faeaa; }
+.week-day-card:nth-child(3) { --day-accent: #ee8c3a; }
+.week-day-card:nth-child(4) { --day-accent: #377fd5; }
+.week-day-card:nth-child(5) { --day-accent: #d75b87; }
+.week-day-card:nth-child(6) { --day-accent: #1a9a70; }
+.week-day-card:nth-child(7) { --day-accent: #8b63d9; }
+.week-day-card.is-enabled { border-width: 2px; border-color: color-mix(in srgb, var(--day-accent) 55%, var(--line)); box-shadow: 0 9px 22px color-mix(in srgb, var(--day-accent) 11%, transparent); }
+.week-day-toggle { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 12px 14px; border: 0; background: color-mix(in srgb, var(--day-accent) 10%, var(--surface-solid)); color: var(--text); text-align: left; }
 .week-day-toggle > span:last-child { display: grid; gap: 2px; min-width: 0; }
-.week-day-toggle strong { font-size: 11px; }
-.week-day-toggle small { overflow: hidden; color: var(--text-soft); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.week-day-toggle strong { color: color-mix(in srgb, var(--day-accent) 82%, var(--text)); font-size: 16px; font-weight: 800; }
+.week-day-toggle small { overflow: hidden; color: var(--text-soft); font-size: 13px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .day-switch { position: relative; width: 35px; height: 21px; border-radius: 999px; background: color-mix(in srgb, var(--text-soft) 22%, var(--surface-soft)); transition: background 160ms ease; }
 .day-switch i { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgb(29 27 55 / 20%); transition: transform 160ms ease; }
-.week-day-card.is-enabled .day-switch { background: linear-gradient(135deg, var(--primary), var(--teal)); }
+.week-day-card.is-enabled .day-switch { background: var(--day-accent); }
 .week-day-card.is-enabled .day-switch i { transform: translateX(14px); }
-.work-period-list { display: grid; gap: 8px; padding: 0 11px 11px 56px; }
+.work-period-list { display: grid; gap: 12px; padding: 14px; border-top: 1px solid color-mix(in srgb, var(--day-accent) 20%, var(--line)); background: color-mix(in srgb, var(--day-accent) 3%, var(--surface-solid)); }
 .work-period-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: end; gap: 6px; }
-.work-period-row label { display: grid; gap: 3px; color: var(--text-soft); font-size: 7px; }
-.work-period-row input { width: 100%; min-width: 0; height: 35px; padding: 0 7px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 10px; }
+.work-period-row label { display: grid; gap: 5px; color: var(--text-soft); font-size: 13px; font-weight: 650; }
+.work-period-row input { width: 100%; min-width: 0; height: 52px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--day-accent) 22%, var(--line)); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 17px; }
 .work-period-dash { align-self: center; margin-top: 10px; color: var(--text-soft); font-size: 10px; }
-.remove-work-period { display: grid; width: 32px; height: 35px; place-items: center; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 17px; }
-.add-work-period { justify-self: start; padding: 6px 9px; border-radius: 9px; background: var(--teal-soft); color: var(--teal); font-size: 8px; font-weight: 750; }
+.remove-work-period { display: grid; min-width: 82px; height: 52px; padding: 0 11px; place-items: center; border: 0; border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-size: 13px; font-weight: 750; }
+.add-work-period { justify-self: stretch; min-height: 46px; padding: 0 12px; border: 0; border-radius: 11px; background: color-mix(in srgb, var(--day-accent) 14%, var(--surface-solid)); color: var(--day-accent); font-size: 14px; font-weight: 800; }
 .add-work-period:disabled { opacity: .45; }
 .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .settings-fields label { display: grid; gap: 6px; color: var(--text-soft); font-size: 9px; }
@@ -1407,7 +1433,6 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .admin-mode [data-admin-only] { display: grid !important; }
 .live-mode .bottom-nav { grid-template-columns: repeat(2, 1fr); }
 .live-mode.admin-mode .bottom-nav { grid-template-columns: repeat(3, 1fr); }
-.telegram-mode .back-button { display: none !important; }
 .telegram-mode .topbar { padding-top: calc(12px + var(--safe-top)); }
 .telegram-mode body { min-height: var(--app-viewport-height); }
 
@@ -1537,23 +1562,23 @@ textarea { font-size: var(--type-control); line-height: 1.5; }
 .timezone-select { min-width: 0; gap: 7px; font-size: var(--type-caption); text-align: left; }
 .timezone-select select { min-height: 50px; padding: 0 38px 0 13px; font-size: var(--type-body); }
 .week-schedule-editor { padding: 17px; }
-.week-schedule-head h3 { font-size: 17px; }
-.week-schedule-head > span { padding: 7px 10px; font-size: var(--type-caption); }
+.week-schedule-head h3 { font-size: 19px; }
+.week-schedule-head > span { padding: 8px 11px; font-size: var(--type-caption); }
 .week-schedule-help { margin-top: 10px; font-size: var(--type-small); line-height: 1.55; }
 .working-periods { gap: 10px; margin-top: 15px; }
-.week-day-toggle { min-height: 62px; padding: 12px 13px; }
-.week-day-toggle strong { font-size: var(--type-body); }
+.week-day-toggle { min-height: 70px; padding: 14px; }
+.week-day-toggle strong { font-size: 17px; }
 .week-day-toggle small { margin-top: 2px; font-size: var(--type-small); }
 .day-switch { width: 42px; height: 26px; }
 .day-switch i { width: 20px; height: 20px; }
 .week-day-card.is-enabled .day-switch i { transform: translateX(16px); }
-.work-period-list { gap: 11px; padding: 0 13px 14px; }
+.work-period-list { gap: 11px; padding: 14px 13px; }
 .work-period-row { gap: 8px; }
 .work-period-row label { gap: 5px; font-size: var(--type-caption); }
-.work-period-row input { height: 48px; padding: 0 10px; font-size: var(--type-control); }
+.work-period-row input { height: 54px; padding: 0 10px; font-size: var(--type-control); }
 .work-period-dash { margin-top: 18px; font-size: 15px; }
-.remove-work-period { width: 44px; height: 48px; font-size: 22px; }
-.add-work-period { min-height: 42px; padding: 0 13px; font-size: var(--type-small); }
+.remove-work-period { height: 54px; font-size: var(--type-caption); }
+.add-work-period { min-height: 48px; padding: 0 13px; font-size: var(--type-small); }
 .settings-fields { gap: 13px; }
 .settings-fields label,
 .restriction-fields label,
@@ -1599,11 +1624,13 @@ textarea { font-size: var(--type-control); line-height: 1.5; }
   .integration-status-card,
   .schedule-settings-card,
   .admin-tools-overview { padding: 16px; }
-  .week-schedule-editor { padding: 13px; }
+  .week-schedule-editor { padding: 14px; }
+  .week-schedule-head { display: grid; }
+  .week-schedule-head > span { max-width: none; justify-self: start; text-align: left; }
   .work-period-list { padding-right: 10px; padding-left: 10px; }
   .work-period-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
   .work-period-dash { display: none; }
-  .remove-work-period { grid-column: 1 / -1; width: 100%; height: 44px; }
+  .remove-work-period { grid-column: 1 / -1; width: 100%; height: 48px; }
   .settings-fields { grid-template-columns: 1fr; }
   .settings-fields label:first-child { grid-column: auto; }
   .admin-tool-metrics { grid-template-columns: 1fr; }

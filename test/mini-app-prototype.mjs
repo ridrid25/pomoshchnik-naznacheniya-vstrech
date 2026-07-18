@@ -36,10 +36,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(css, /--primary:/u);
   assert.match(css, /--teal:/u);
   assert.match(css, /--warm:/u);
-  assert.match(css, /--type-caption: 12px/u);
-  assert.match(css, /--type-control: 16px/u);
+  assert.match(css, /--type-caption: 13px/u);
+  assert.match(css, /--type-control: 17px/u);
   assert.match(css, /Mobile readability pass/u);
-  assert.match(css, /\.work-period-row input \{ height: 48px/u);
+  assert.match(css, /\.work-period-row input \{ height: 54px/u);
   assert.match(css, /@media \(max-width: 480px\)/u);
   assert.match(css, /\.work-period-dash \{ display: none; \}/u);
   assert.match(css, /\.bottom-nav button \{ font-size: var\(--type-caption\)/u);
@@ -103,8 +103,9 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /toggleWorkingDay/u);
   assert.match(javascript, /addWorkingPeriod/u);
   assert.match(javascript, /validateWorkingPeriods/u);
-  assert.match(html, /Дни и часы для записи/u);
-  assert.match(html, /несколько интервалов/u);
+  assert.match(html, /Когда ко мне можно записаться/u);
+  assert.match(html, /Интервал времени — 15 минут/u);
+  assert.match(html, /добавить ещё один промежуток времени/u);
   assert.match(css, /week-day-card/u);
   assert.match(css, /day-switch/u);
   assert.match(javascript, /moveByScrollStop/u);
@@ -116,7 +117,11 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(html, /id="scrollUp"/u);
   assert.match(html, /id="scrollDown"/u);
   assert.match(css, /integration-status-card/u);
-  assert.match(html, /Календарь и расписание/u);
+  assert.match(html, /Управление встречами/u);
+  assert.match(html, /Настройки расписания/u);
+  assert.match(html, /<span>Назад<\/span>/u);
+  assert.doesNotMatch(css, /\.telegram-mode \.back-button \{ display: none/u);
+  assert.doesNotMatch(`${html}\n${javascript}`, /администратор/iu);
   assert.match(html, /Калининград · UTC\+2/u);
   assert.match(html, /Камчатка · UTC\+12/u);
   assert.match(javascript, /timezone: elements\.scheduleTimezone\.value/u);

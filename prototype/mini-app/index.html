@@ -24,6 +24,7 @@
       <header class="topbar">
         <button class="icon-button back-button is-hidden" id="backButton" type="button" aria-label="Назад">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+          <span>Назад</span>
         </button>
         <div class="brand-block">
           <span class="brand-mark" aria-hidden="true">
@@ -65,6 +66,11 @@
           <button class="home-action-card" type="button" data-nav="bookings">
             <span class="metric-icon teal"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3v3m8-3v3M4.5 9.5h15M6.5 5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /><path d="m9 15 2 2 4-5" /></svg></span>
             <span><strong>Мои записи</strong><small>Статусы, перенос и отмена</small></span>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
+          <button class="home-action-card admin-home-action" type="button" data-nav="admin" data-admin-only>
+            <span class="metric-icon purple"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6Z" /><path d="m9 12 2 2 4-5" /></svg></span>
+            <span><strong>Управление встречами</strong><small>Заявки, календарь и расписание</small></span>
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
           </button>
         </div>
@@ -248,7 +254,7 @@
 
       <section class="screen" data-screen="admin" aria-labelledby="adminTitle">
         <div class="page-heading">
-          <div><p class="eyebrow">Режим администратора</p><h1 id="adminTitle">Согласование</h1></div>
+          <div><p class="eyebrow">Управление встречами</p><h1 id="adminTitle">Заявки на встречу</h1></div>
           <span class="count-badge warm" id="adminQueueCount">0</span>
         </div>
         <div class="admin-overview">
@@ -259,7 +265,7 @@
         <article class="reliability-card" id="adminReliability"></article>
         <button class="admin-settings-entry" type="button" data-nav="admin-settings">
           <span class="metric-icon purple"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.52-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.05V3h4v.08a1.7 1.7 0 0 0 1.03 1.52 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.52 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z" /></svg></span>
-          <span><strong>Календарь и расписание</strong><small>Состояние интеграции и правила записи</small></span>
+          <span><strong>Настройки расписания</strong><small>Рабочие дни, время и Google Calendar</small></span>
           <span aria-hidden="true">›</span>
         </button>
         <div class="tab-control" role="tablist" aria-label="Фильтр очереди">
@@ -281,8 +287,8 @@
 
       <section class="screen" data-screen="admin-settings" aria-labelledby="adminSettingsTitle">
         <div class="page-heading">
-          <div><p class="eyebrow">Центр управления</p><h1 id="adminSettingsTitle">Настройки</h1></div>
-          <span class="format-chip online">Администратор</span>
+          <div><p class="eyebrow">Управление встречами</p><h1 id="adminSettingsTitle">Настройки расписания</h1></div>
+          <span class="format-chip online">Только для вас</span>
         </div>
         <p class="availability-state" id="adminSettingsState" role="status">Загружаем настройки…</p>
         <div id="adminSettingsContent" class="admin-settings-content is-hidden">
@@ -293,8 +299,8 @@
               <label class="timezone-select"><span>Часовой пояс</span><select id="scheduleTimezone" aria-label="Часовой пояс расписания"><option value="Europe/Kaliningrad">Калининград · UTC+2</option><option value="Europe/Moscow">Москва · UTC+3</option><option value="Europe/Samara">Самара · UTC+4</option><option value="Asia/Yekaterinburg">Екатеринбург · UTC+5</option><option value="Asia/Omsk">Омск · UTC+6</option><option value="Asia/Krasnoyarsk">Красноярск · UTC+7</option><option value="Asia/Irkutsk">Иркутск · UTC+8</option><option value="Asia/Yakutsk">Якутск · UTC+9</option><option value="Asia/Vladivostok">Владивосток · UTC+10</option><option value="Asia/Magadan">Магадан · UTC+11</option><option value="Asia/Kamchatka">Камчатка · UTC+12</option></select></label>
             </div>
             <section class="week-schedule-editor" aria-labelledby="weekScheduleTitle">
-              <div class="week-schedule-head"><div><p class="eyebrow">Рабочая неделя</p><h3 id="weekScheduleTitle">Дни и часы для записи</h3></div><span>шаг 15 мин</span></div>
-              <p class="week-schedule-help">Включите нужные дни. В одном дне можно добавить несколько интервалов, например до и после обеда.</p>
+              <div class="week-schedule-head"><div><p class="eyebrow">Рабочая неделя</p><h3 id="weekScheduleTitle">Когда ко мне можно записаться</h3></div><span>Интервал времени — 15 минут</span></div>
+              <p class="week-schedule-help">Включите дни, когда вы принимаете встречи. Для каждого дня укажите начало и конец работы. При необходимости можно добавить ещё один промежуток времени, например после обеда.</p>
               <div class="working-periods" id="workingPeriods"></div>
             </section>
             <div class="settings-fields">
@@ -387,7 +393,7 @@
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3v3m8-3v3M4.5 9.5h15M6.5 5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /><path d="m9 15 2 2 4-5" /></svg><span>Записи</span>
         </button>
         <button type="button" data-nav="admin" data-admin-only>
-          <span class="nav-notice" id="adminNavCount">0</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6Z" /><path d="m9 12 2 2 4-5" /></svg><span>Согласование</span>
+          <span class="nav-notice" id="adminNavCount">0</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6Z" /><path d="m9 12 2 2 4-5" /></svg><span>Управление</span>
         </button>
       </nav>
 
