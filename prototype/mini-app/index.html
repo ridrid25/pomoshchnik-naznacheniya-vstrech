@@ -291,7 +291,11 @@
               <div><p class="eyebrow">Правила записи</p><h2>Основное расписание</h2></div>
               <label class="timezone-select"><span>Часовой пояс</span><select id="scheduleTimezone" aria-label="Часовой пояс расписания"><option value="Europe/Kaliningrad">Калининград · UTC+2</option><option value="Europe/Moscow">Москва · UTC+3</option><option value="Europe/Samara">Самара · UTC+4</option><option value="Asia/Yekaterinburg">Екатеринбург · UTC+5</option><option value="Asia/Omsk">Омск · UTC+6</option><option value="Asia/Krasnoyarsk">Красноярск · UTC+7</option><option value="Asia/Irkutsk">Иркутск · UTC+8</option><option value="Asia/Yakutsk">Якутск · UTC+9</option><option value="Asia/Vladivostok">Владивосток · UTC+10</option><option value="Asia/Magadan">Магадан · UTC+11</option><option value="Asia/Kamchatka">Камчатка · UTC+12</option></select></label>
             </div>
-            <div class="working-periods" id="workingPeriods"></div>
+            <section class="week-schedule-editor" aria-labelledby="weekScheduleTitle">
+              <div class="week-schedule-head"><div><p class="eyebrow">Рабочая неделя</p><h3 id="weekScheduleTitle">Дни и часы для записи</h3></div><span>шаг 15 мин</span></div>
+              <p class="week-schedule-help">Включите нужные дни. В одном дне можно добавить несколько интервалов, например до и после обеда.</p>
+              <div class="working-periods" id="workingPeriods"></div>
+            </section>
             <div class="settings-fields">
               <label><span>Запись не позднее чем за</span><select id="minimumLeadTimeMinutes"><option value="60">1 час</option><option value="180">3 часа</option><option value="720">12 часов</option><option value="1440">24 часа</option><option value="2880">48 часов</option></select></label>
               <label><span>Показывать даты вперёд</span><select id="bookingHorizonDays"><option value="7">7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option><option value="60">60 дней</option><option value="90">90 дней</option></select></label>

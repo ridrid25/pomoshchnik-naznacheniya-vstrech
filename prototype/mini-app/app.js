@@ -57,6 +57,7 @@
     notificationChannel: 'TELEGRAM',
     adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null, reliability: null },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
+    workingPeriodsDraft: [],
     restrictions: [], pendingRestrictionDeleteId: null,
     blockedUsers: [], pendingUnblockUserId: null,
     templates: [], selectedTemplate: null,
@@ -659,7 +660,8 @@
       <div class="integration-account"><span>Аккаунт</span><strong>${escapeHtml(google.accountEmail || 'Не определён')}</strong></div>`;
     const schedule = settings.schedule;
     elements.scheduleTimezone.value = schedule.timezone;
-    elements.workingPeriods.innerHTML = renderWorkingPeriods(schedule.workingPeriods);
+    state.workingPeriodsDraft = schedule.workingPeriods.map((period) => ({ ...period }));
+    renderWorkingPeriods();
     setSelectValue(elements.minimumLeadTimeMinutes, schedule.minimumLeadTimeMinutes, `${schedule.minimumLeadTimeMinutes} мин`);
     setSelectValue(elements.bookingHorizonDays, schedule.bookingHorizonDays, `${schedule.bookingHorizonDays} дней`);
     setSelectValue(elements.maxMeetingsPerDay, schedule.maxMeetingsPerDay, `До ${schedule.maxMeetingsPerDay}`);
@@ -672,18 +674,114 @@
     elements.adminSettingsContent.classList.remove('is-hidden');
   }
 
-  function renderWorkingPeriods(periods) {
-    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    const grouped = new Map();
-    periods.forEach((period) => {
-      if (!grouped.has(period.weekday)) grouped.set(period.weekday, []);
-      grouped.get(period.weekday).push(`${minuteTime(period.startMinute)}–${minuteTime(period.endMinute)}`);
-    });
-    return [...grouped.entries()].map(([weekday, ranges]) => `<span><strong>${dayNames[weekday] || weekday}</strong><small>${escapeHtml(ranges.join(', '))}</small></span>`).join('');
+  function renderWorkingPeriods() {
+    const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+    elements.workingPeriods.innerHTML = [1, 2, 3, 4, 5, 6, 0].map((weekday) => {
+      const periods = state.workingPeriodsDraft
+        .filter((period) => period.weekday === weekday)
+        .sort((left, right) => left.startMinute - right.startMinute);
+      const enabled = periods.length > 0;
+      const ranges = periods.map((period, index) => `
+        <div class="work-period-row">
+          <label><span>С</span><input type="time" step="900" value="${minuteTimeInput(period.startMinute)}" data-period-field="startMinute" data-period-weekday="${weekday}" data-period-index="${index}" aria-label="${dayNames[weekday]}: начало интервала ${index + 1}"></label>
+          <span class="work-period-dash">—</span>
+          <label><span>До</span><input type="time" step="900" value="${minuteTimeInput(period.endMinute)}" data-period-field="endMinute" data-period-weekday="${weekday}" data-period-index="${index}" aria-label="${dayNames[weekday]}: конец интервала ${index + 1}"></label>
+          <button class="remove-work-period" type="button" data-remove-work-period="${weekday}:${index}" aria-label="Удалить интервал ${index + 1} в день ${dayNames[weekday]}">×</button>
+        </div>`).join('');
+      return `<article class="week-day-card ${enabled ? 'is-enabled' : ''}">
+        <button class="week-day-toggle" type="button" data-toggle-weekday="${weekday}" aria-pressed="${enabled}"><span class="day-switch" aria-hidden="true"><i></i></span><span><strong>${dayNames[weekday]}</strong><small>${enabled ? periods.map((period) => `${minuteTime(period.startMinute)}–${minuteTime(period.endMinute)}`).join(', ') : 'Выходной'}</small></span></button>
+        <div class="work-period-list ${enabled ? '' : 'is-hidden'}">${ranges}<button class="add-work-period" type="button" data-add-work-period="${weekday}" ${periods.length >= 4 ? 'disabled' : ''}>+ Добавить интервал</button></div>
+      </article>`;
+    }).join('');
   }
 
   function minuteTime(minutes) {
     return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  }
+
+  function minuteTimeInput(minutes) {
+    return minutes === 1440 ? '00:00' : minuteTime(minutes);
+  }
+
+  function timeInputMinutes(value, field) {
+    const [hour, minute] = String(value).split(':').map(Number);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+    if (field === 'endMinute' && hour === 0 && minute === 0) return 1440;
+    return hour * 60 + minute;
+  }
+
+  function toggleWorkingDay(weekday) {
+    const enabled = state.workingPeriodsDraft.some((period) => period.weekday === weekday);
+    state.workingPeriodsDraft = state.workingPeriodsDraft.filter((period) => period.weekday !== weekday);
+    if (!enabled) state.workingPeriodsDraft.push({ weekday, startMinute: 9 * 60, endMinute: 18 * 60 });
+    renderWorkingPeriods();
+  }
+
+  function addWorkingPeriod(weekday) {
+    const dayPeriods = state.workingPeriodsDraft
+      .filter((period) => period.weekday === weekday)
+      .sort((left, right) => left.startMinute - right.startMinute);
+    if (dayPeriods.length >= 4) return;
+    const candidate = findFreeWorkingPeriod(dayPeriods);
+    if (!candidate) {
+      showToast('В этом дне нет места для ещё одного интервала');
+      return;
+    }
+    state.workingPeriodsDraft.push({ weekday, ...candidate });
+    renderWorkingPeriods();
+  }
+
+  function findFreeWorkingPeriod(periods) {
+    for (const duration of [120, 60, 30]) {
+      for (let startMinute = 9 * 60; startMinute + duration <= 1440; startMinute += 30) {
+        const endMinute = startMinute + duration;
+        if (periods.every((period) => endMinute <= period.startMinute || startMinute >= period.endMinute)) {
+          return { startMinute, endMinute };
+        }
+      }
+    }
+    return null;
+  }
+
+  function removeWorkingPeriod(weekday, index) {
+    const dayPeriods = state.workingPeriodsDraft
+      .filter((period) => period.weekday === weekday)
+      .sort((left, right) => left.startMinute - right.startMinute);
+    const removed = dayPeriods[index];
+    if (!removed) return;
+    const position = state.workingPeriodsDraft.indexOf(removed);
+    state.workingPeriodsDraft.splice(position, 1);
+    renderWorkingPeriods();
+  }
+
+  function updateWorkingPeriodInput(input) {
+    const weekday = Number(input.dataset.periodWeekday);
+    const index = Number(input.dataset.periodIndex);
+    const field = input.dataset.periodField;
+    const dayPeriods = state.workingPeriodsDraft
+      .filter((period) => period.weekday === weekday)
+      .sort((left, right) => left.startMinute - right.startMinute);
+    const period = dayPeriods[index];
+    const minutes = timeInputMinutes(input.value, field);
+    if (!period || minutes === null || (field !== 'startMinute' && field !== 'endMinute')) return;
+    period[field] = minutes;
+    const summary = input.closest('.week-day-card')?.querySelector('.week-day-toggle small');
+    if (summary) summary.textContent = dayPeriods.map((item) => `${minuteTime(item.startMinute)}–${minuteTime(item.endMinute)}`).join(', ');
+  }
+
+  function validateWorkingPeriods() {
+    if (!state.workingPeriodsDraft.length) return 'Оставьте хотя бы один рабочий день';
+    for (const weekday of [0, 1, 2, 3, 4, 5, 6]) {
+      const periods = state.workingPeriodsDraft
+        .filter((period) => period.weekday === weekday)
+        .sort((left, right) => left.startMinute - right.startMinute);
+      for (let index = 0; index < periods.length; index += 1) {
+        if (periods[index].startMinute % 15 !== 0 || periods[index].endMinute % 15 !== 0) return 'Выберите время с шагом 15 минут';
+        if (periods[index].endMinute - periods[index].startMinute < 30) return 'Каждый интервал должен длиться не меньше 30 минут';
+        if (index > 0 && periods[index].startMinute < periods[index - 1].endMinute) return 'Интервалы одного дня не должны пересекаться';
+      }
+    }
+    return null;
   }
 
   function setSelectValue(select, value, label) {
@@ -695,6 +793,11 @@
 
   async function saveAdminSchedule(event) {
     event.preventDefault();
+    const workingPeriodsError = validateWorkingPeriods();
+    if (workingPeriodsError) {
+      showToast(workingPeriodsError);
+      return;
+    }
     const payload = {
       timezone: elements.scheduleTimezone.value,
       minimumLeadTimeMinutes: Number(elements.minimumLeadTimeMinutes.value),
@@ -702,6 +805,7 @@
       maxMeetingsPerDay: Number(elements.maxMeetingsPerDay.value),
       bufferBeforeMinutes: Number(elements.bufferBeforeMinutes.value),
       bufferAfterMinutes: Number(elements.bufferAfterMinutes.value),
+      workingPeriods: state.workingPeriodsDraft.map((period) => ({ ...period })),
     };
     elements.saveScheduleSettings.disabled = true;
     elements.saveScheduleSettings.textContent = 'Сохраняем…';
@@ -1296,6 +1400,13 @@
     if (button.dataset.unblockUserId) { askUnblockUser(button.dataset.unblockUserId, button.dataset.unblockUserName || 'Пользователь'); return; }
     if (button.dataset.templateType) { openTemplateEditor(button.dataset.templateType); return; }
     if (button.dataset.insertPlaceholder) { insertPlaceholder(button.dataset.insertPlaceholder); return; }
+    if (button.dataset.toggleWeekday !== undefined) { toggleWorkingDay(Number(button.dataset.toggleWeekday)); return; }
+    if (button.dataset.addWorkPeriod !== undefined) { addWorkingPeriod(Number(button.dataset.addWorkPeriod)); return; }
+    if (button.dataset.removeWorkPeriod) {
+      const [weekday, index] = button.dataset.removeWorkPeriod.split(':').map(Number);
+      removeWorkingPeriod(weekday, index);
+      return;
+    }
     if (button.dataset.calendarUrl) { openCalendarDay(button.dataset.calendarUrl); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
@@ -1341,6 +1452,10 @@
   elements.scheduleSettingsForm.addEventListener('submit', saveAdminSchedule);
   elements.restrictionForm.addEventListener('submit', saveRestriction);
   elements.templateEditorForm.addEventListener('submit', saveTemplate);
+  elements.workingPeriods.addEventListener('change', (event) => {
+    const input = event.target.closest('[data-period-field]');
+    if (input) updateWorkingPeriodInput(input);
+  });
   elements.restrictionType.addEventListener('change', toggleRestrictionTimeFields);
   elements.back.addEventListener('click', goBack);
   elements.previous.addEventListener('click', () => setWizardStep(state.step - 1));

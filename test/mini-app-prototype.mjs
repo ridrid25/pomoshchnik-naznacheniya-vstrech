@@ -82,6 +82,14 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.doesNotMatch(javascript, /adminDetailCode'\)\.textContent = `Заявка \$\{booking\.publicCode\}`/u);
   assert.match(javascript, /admin\/settings\/schedule/u);
   assert.match(javascript, /saveAdminSchedule/u);
+  assert.match(javascript, /workingPeriodsDraft/u);
+  assert.match(javascript, /toggleWorkingDay/u);
+  assert.match(javascript, /addWorkingPeriod/u);
+  assert.match(javascript, /validateWorkingPeriods/u);
+  assert.match(html, /Дни и часы для записи/u);
+  assert.match(html, /несколько интервалов/u);
+  assert.match(css, /week-day-card/u);
+  assert.match(css, /day-switch/u);
   assert.match(javascript, /moveByScrollStop/u);
   assert.match(javascript, /updateScrollControls/u);
   assert.match(css, /calendar-review-card/u);

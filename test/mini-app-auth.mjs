@@ -182,6 +182,55 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     );
     assert.equal(invalidAdminSettings.status, 400);
 
+    const customWorkingPeriods = [
+      { weekday: 1, startMinute: 9 * 60, endMinute: 13 * 60 },
+      { weekday: 1, startMinute: 14 * 60, endMinute: 18 * 60 },
+      { weekday: 3, startMinute: 10 * 60, endMinute: 16 * 60 },
+      { weekday: 6, startMinute: 11 * 60, endMinute: 14 * 60 },
+    ];
+    const updatedWorkingPeriods = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings/schedule`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          timezone: 'Europe/Moscow',
+          minimumLeadTimeMinutes: 1440,
+          bookingHorizonDays: 30,
+          maxMeetingsPerDay: 4,
+          bufferBeforeMinutes: 0,
+          bufferAfterMinutes: 0,
+          workingPeriods: customWorkingPeriods,
+        }),
+      },
+    );
+    assert.equal(updatedWorkingPeriods.status, 200, await updatedWorkingPeriods.clone().text());
+    assert.deepEqual(
+      (await updatedWorkingPeriods.json()).schedule.workingPeriods,
+      customWorkingPeriods,
+    );
+
+    const overlappingWorkingPeriods = await fetch(
+      `${origin}/api/mini-app/v1/admin/settings/schedule`,
+      {
+        method: 'PATCH',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          timezone: 'Europe/Moscow',
+          minimumLeadTimeMinutes: 1440,
+          bookingHorizonDays: 30,
+          maxMeetingsPerDay: 4,
+          bufferBeforeMinutes: 0,
+          bufferAfterMinutes: 0,
+          workingPeriods: [
+            { weekday: 1, startMinute: 9 * 60, endMinute: 13 * 60 },
+            { weekday: 1, startMinute: 12 * 60, endMinute: 15 * 60 },
+          ],
+        }),
+      },
+    );
+    assert.equal(overlappingWorkingPeriods.status, 400);
+
     const restoredAdminSettings = await fetch(
       `${origin}/api/mini-app/v1/admin/settings/schedule`,
       {
@@ -194,6 +243,11 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
           maxMeetingsPerDay: 4,
           bufferBeforeMinutes: 0,
           bufferAfterMinutes: 0,
+          workingPeriods: [1, 2, 3, 4, 5].map((weekday) => ({
+            weekday,
+            startMinute: 9 * 60,
+            endMinute: 18 * 60,
+          })),
         }),
       },
     );
