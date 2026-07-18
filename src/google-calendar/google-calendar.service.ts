@@ -28,6 +28,8 @@ export interface CreateGoogleEventInput {
 export interface CreatePendingGoogleEventInput
   extends Omit<CreateGoogleEventInput, 'attendeeEmail' | 'createConference'> {
   bookingId: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
 }
 
 export interface CreatedGoogleEvent {
@@ -320,6 +322,12 @@ export class GoogleCalendarService {
           transparency: 'transparent',
           colorId: '8',
           visibility: 'private',
+          source: input.sourceUrl
+            ? {
+                title: input.sourceTitle || 'Подтвердить или отклонить заявку',
+                url: input.sourceUrl,
+              }
+            : undefined,
           reminders: { useDefault: false, overrides: [] },
           extendedProperties: {
             private: {
@@ -361,6 +369,12 @@ export class GoogleCalendarService {
           transparency: 'transparent',
           colorId: '8',
           visibility: 'private',
+          source: input.sourceUrl
+            ? {
+                title: input.sourceTitle || 'Подтвердить или отклонить заявку',
+                url: input.sourceUrl,
+              }
+            : undefined,
           attendees: [],
           reminders: { useDefault: false, overrides: [] },
           extendedProperties: {
@@ -383,6 +397,7 @@ export class GoogleCalendarService {
   async updateEventDescription(
     googleEventId: string,
     description: string,
+    source?: { title: string; url: string } | null,
   ): Promise<void> {
     try {
       const calendar = await this.authorizedCalendar();
@@ -390,7 +405,7 @@ export class GoogleCalendarService {
         calendarId: this.calendarId,
         eventId: googleEventId,
         sendUpdates: 'none',
-        requestBody: { description },
+        requestBody: { description, source },
       });
       this.logger.logEvent('GoogleCalendarService', 'google.event.description_updated', {
         google_event_id: googleEventId,
@@ -420,6 +435,7 @@ export class GoogleCalendarService {
           status: 'confirmed',
           transparency: 'opaque',
           colorId: '10',
+          source: null,
           attendees: input.attendeeEmail
             ? [{ email: input.attendeeEmail }]
             : [],

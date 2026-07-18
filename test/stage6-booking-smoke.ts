@@ -45,10 +45,13 @@ async function main(): Promise<void> {
     const confirmedPendingEvents: string[] = [];
     const pendingDescriptions: string[] = [];
     const updatedDescriptions: string[] = [];
+    const pendingSourceUrls: string[] = [];
+    const updatedSourceUrls: string[] = [];
     const googleCalendar = {
       isConfigured: () => true,
-      createPendingEvent: async (input: { description: string }) => {
+      createPendingEvent: async (input: { description: string; sourceUrl?: string }) => {
         pendingDescriptions.push(input.description);
+        if (input.sourceUrl) pendingSourceUrls.push(input.sourceUrl);
         return {
         googleEventId: `stage6-pending-${++eventSequence}`,
         googleMeetUrl: null,
@@ -56,15 +59,18 @@ async function main(): Promise<void> {
       },
       updatePendingEvent: async (
         _googleEventId: string,
-        input: { description: string },
+        input: { description: string; sourceUrl?: string },
       ) => {
         pendingDescriptions.push(input.description);
+        if (input.sourceUrl) pendingSourceUrls.push(input.sourceUrl);
       },
       updateEventDescription: async (
         _googleEventId: string,
         description: string,
+        source?: { url: string } | null,
       ) => {
         updatedDescriptions.push(description);
+        if (source?.url) updatedSourceUrls.push(source.url);
       },
       confirmPendingEvent: async (
         googleEventId: string,
@@ -107,6 +113,7 @@ async function main(): Promise<void> {
       availability as never,
       googleCalendar as never,
       new JsonLoggerService(),
+      reviewTokens,
     );
 
     const validToken = reviewTokens.createToken(
@@ -230,11 +237,19 @@ async function main(): Promise<void> {
       /https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
     );
     assert.match(
+      pendingSourceUrls[0],
+      /^https:\/\/meeting\.example\.com\/admin\/review\//u,
+    );
+    assert.match(
       await service.ensureCalendarReturnLink(first.id),
       /^https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
     );
     assert.match(updatedDescriptions[0], /Открыть заявку и принять решение в Telegram/u);
     assert.ok(!updatedDescriptions[0].includes('/admin/review/'));
+    assert.match(
+      updatedSourceUrls[0],
+      /^https:\/\/meeting\.example\.com\/admin\/review\//u,
+    );
     const decisionNotifications: string[] = [];
     const decisionService = new BookingDecisionService(
       prisma as never,

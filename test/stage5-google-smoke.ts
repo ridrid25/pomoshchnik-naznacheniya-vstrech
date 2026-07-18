@@ -124,6 +124,8 @@ async function main(): Promise<void> {
       startAt: new Date('2030-01-15T08:00:00.000Z'),
       endAt: new Date('2030-01-15T08:30:00.000Z'),
       timezone: 'Europe/Moscow',
+      sourceUrl: 'https://meeting.example.com/admin/review/signed-token',
+      sourceTitle: 'Подтвердить или отклонить заявку',
     });
     assert.equal(pending.googleEventId, 'google-stage5-event-1');
     const pendingInsert = calls.find((call) => {
@@ -139,6 +141,7 @@ async function main(): Promise<void> {
       end: { dateTime: string; timeZone: string };
       attendees?: unknown;
       conferenceData?: unknown;
+      source?: { title: string; url: string };
     };
     assert.ok(pendingBody.summary.startsWith('⏳ На согласовании'));
     assert.ok(pendingBody.summary.includes('Stage 5 pending'));
@@ -155,10 +158,18 @@ async function main(): Promise<void> {
     });
     assert.equal(pendingBody.attendees, undefined);
     assert.equal(pendingBody.conferenceData, undefined);
+    assert.deepEqual(pendingBody.source, {
+      title: 'Подтвердить или отклонить заявку',
+      url: 'https://meeting.example.com/admin/review/signed-token',
+    });
 
     await service.updateEventDescription(
       pending.googleEventId,
       '← Открыть встречу в Telegram:\nhttps://t.me/example_bot?start=calendar_booking',
+      {
+        title: 'Подтвердить или отклонить заявку',
+        url: 'https://meeting.example.com/admin/review/signed-token',
+      },
     );
     const descriptionPatch = calls.find((call) => {
       const requestBody = call.params.requestBody as { description?: string; status?: string } | undefined;
@@ -166,6 +177,13 @@ async function main(): Promise<void> {
     });
     assert.equal(descriptionPatch?.params.eventId, pending.googleEventId);
     assert.equal(descriptionPatch?.params.sendUpdates, 'none');
+    assert.deepEqual(
+      (descriptionPatch?.params.requestBody as { source?: unknown }).source,
+      {
+        title: 'Подтвердить или отклонить заявку',
+        url: 'https://meeting.example.com/admin/review/signed-token',
+      },
+    );
 
     const confirmedPending = await service.confirmPendingEvent(
       pending.googleEventId,
@@ -178,6 +196,14 @@ async function main(): Promise<void> {
         attendeeEmail: 'stage5@example.com',
         createConference: true,
       },
+    );
+    const confirmationPatch = calls.find((call) => {
+      const requestBody = call.params.requestBody as { status?: string } | undefined;
+      return call.method === 'events.patch' && requestBody?.status === 'confirmed';
+    });
+    assert.equal(
+      (confirmationPatch?.params.requestBody as { source?: unknown }).source,
+      null,
     );
     assert.deepEqual(confirmedPending, {
       googleEventId: 'google-stage5-event-1',
