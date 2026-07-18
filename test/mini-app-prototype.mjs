@@ -53,6 +53,12 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /reschedule/u);
   assert.match(javascript, /me\/notifications/u);
   assert.match(javascript, /bookingList/u);
+  assert.match(html, /История <span id="archiveCount"/u);
+  assert.match(html, /id="bookingsScopeHint"/u);
+  assert.match(javascript, /Здесь только предстоящие встречи/u);
+  assert.match(javascript, /Здесь хранятся прошедшие и закрытые записи/u);
+  assert.match(javascript, /Дата прошла/u);
+  assert.match(css, /bookings-scope-hint/u);
   assert.match(javascript, /dataset\.adminAction/u);
   assert.match(javascript, /admin\/bookings/u);
   assert.match(javascript, /googleCalendarDayUrl/u);

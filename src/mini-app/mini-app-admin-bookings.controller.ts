@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -42,6 +43,7 @@ type AdminBooking = Prisma.BookingGetPayload<{
 }>;
 
 const AGING_AFTER_MS = 15 * 60_000;
+const MAX_BOOKING_DURATION_MS = 60 * 60_000;
 const M9_OBSERVATION_STARTED_AT = new Date('2026-07-17T14:01:24.000Z');
 const M9_MINIMUM_SAMPLE_SIZE = 5;
 const M8_BASELINE_SAMPLE_SIZE = 9;
@@ -78,43 +80,38 @@ export class MiniAppAdminBookingsController {
     startOfToday.setHours(0, 0, 0, 0);
     const now = new Date();
     const agingCutoff = new Date(now.getTime() - AGING_AFTER_MS);
+    const activeStartCutoff = new Date(now.getTime() - MAX_BOOKING_DURATION_MS);
     const [
-      bookings,
-      pending,
+      bookingCandidates,
+      pendingCandidates,
       decidedToday,
-      aging,
-      oldestPending,
       m9SampleSize,
       m9SlotUnavailable,
     ] = await this.prisma.$transaction([
       this.prisma.booking.findMany({
         where:
           scope === 'pending'
-            ? { status: { in: pendingStatuses } }
-            : { status: { notIn: pendingStatuses } },
+            ? {
+                status: { in: pendingStatuses },
+                startAt: { gt: activeStartCutoff },
+              }
+            : undefined,
         include: { user: true, calendarEvent: true },
         orderBy: scope === 'pending' ? { createdAt: 'asc' } : { updatedAt: 'desc' },
-        take: 100,
+        take: scope === 'pending' ? 100 : 200,
       }),
-      this.prisma.booking.count({
-        where: { status: { in: pendingStatuses } },
+      this.prisma.booking.findMany({
+        where: {
+          status: { in: pendingStatuses },
+          startAt: { gt: activeStartCutoff },
+        },
+        select: { startAt: true, durationMinutes: true, createdAt: true },
       }),
       this.prisma.booking.count({
         where: {
           status: { notIn: pendingStatuses },
           updatedAt: { gte: startOfToday },
         },
-      }),
-      this.prisma.booking.count({
-        where: {
-          status: { in: pendingStatuses },
-          createdAt: { lte: agingCutoff },
-        },
-      }),
-      this.prisma.booking.findFirst({
-        where: { status: { in: pendingStatuses } },
-        orderBy: { createdAt: 'asc' },
-        select: { createdAt: true },
       }),
       this.prisma.booking.count({
         where: {
@@ -130,21 +127,38 @@ export class MiniAppAdminBookingsController {
         },
       }),
     ]);
+    const actionablePending = pendingCandidates.filter((booking) =>
+      isBookingFuture(booking, now),
+    );
+    const oldestPending = actionablePending.reduce<Date | null>(
+      (oldest, booking) =>
+        !oldest || booking.createdAt < oldest ? booking.createdAt : oldest,
+      null,
+    );
+    const scopedBookings = bookingCandidates
+      .filter((booking) =>
+        scope === 'pending'
+          ? isBookingActionable(booking, now)
+          : !isBookingActionable(booking, now),
+      )
+      .slice(0, 100);
     const m9RatePercent = m9SampleSize
       ? Math.round((m9SlotUnavailable / m9SampleSize) * 1_000) / 10
       : null;
     const comparison = compareReliability(m9SampleSize, m9SlotUnavailable);
     const bookingContracts = await Promise.all(
-      bookings.map((booking) => this.toContract(booking, null, now)),
+      scopedBookings.map((booking) => this.toContract(booking, null, now)),
     );
     return {
       bookings: bookingContracts,
       summary: {
-        pending,
+        pending: actionablePending.length,
         decidedToday,
-        aging,
+        aging: actionablePending.filter(
+          (booking) => booking.createdAt <= agingCutoff,
+        ).length,
         oldestWaitingMinutes: oldestPending
-          ? Math.max(0, Math.floor((now.getTime() - oldestPending.createdAt.getTime()) / 60_000))
+          ? Math.max(0, Math.floor((now.getTime() - oldestPending.getTime()) / 60_000))
           : null,
         reliability: {
           observationStartedAt: M9_OBSERVATION_STARTED_AT.toISOString(),
@@ -199,7 +213,10 @@ export class MiniAppAdminBookingsController {
   }> {
     const action = parseAction(actionRaw);
     const reason = parseReason(body?.reason);
-    await this.findBooking(id);
+    const booking = await this.findBooking(id);
+    if (!isBookingFuture(booking, new Date())) {
+      throw new ConflictException('Booking date has already passed');
+    }
     const adminTelegramId = requireAdminTelegramId(request);
     const decision = await this.decisions.decide(id, action, {
       reason: action === 'confirm' ? undefined : reason,
@@ -226,7 +243,8 @@ export class MiniAppAdminBookingsController {
     now = new Date(),
   ): Promise<MiniAppAdminBookingContract> {
     const slotAvailable =
-      booking.status === BookingStatus.PENDING_APPROVAL
+      booking.status === BookingStatus.PENDING_APPROVAL &&
+      isBookingFuture(booking, now)
         ? await this.isBookingSlotAvailable(booking)
         : null;
     return toAdminBookingContract(
@@ -310,7 +328,8 @@ function toAdminBookingContract(
   );
   const pending = booking.status === BookingStatus.PENDING_APPROVAL;
   const technicalError = booking.status === BookingStatus.CONFIRMATION_ERROR;
-  const requiresDecision = pending || technicalError;
+  const requiresDecision =
+    (pending || technicalError) && isBookingFuture(booking, now);
   const waitingMinutes = requiresDecision
     ? Math.max(0, Math.floor((now.getTime() - booking.createdAt.getTime()) / 60_000))
     : null;
@@ -342,19 +361,39 @@ function toAdminBookingContract(
       displayName: booking.user.telegramDisplayName,
       status: booking.user.status,
     },
-    queueState: technicalError
-      ? 'TECHNICAL_ERROR'
-      : pending
-        ? 'REQUIRES_DECISION'
-        : 'PROCESSED',
+    queueState: !requiresDecision
+      ? 'PROCESSED'
+      : technicalError
+        ? 'TECHNICAL_ERROR'
+        : 'REQUIRES_DECISION',
     waitingMinutes,
     isAging: waitingMinutes !== null && waitingMinutes >= 15,
     slotAvailable,
-    canConfirm: pending && slotAvailable !== false,
-    canReject: pending || technicalError,
+    canConfirm: requiresDecision && pending && slotAvailable !== false,
+    canReject: requiresDecision,
     canBlock:
-      (pending || technicalError) && booking.user.status === UserStatus.ACTIVE,
+      requiresDecision && booking.user.status === UserStatus.ACTIVE,
   };
+}
+
+function isBookingFuture(
+  booking: { startAt: Date; durationMinutes: number },
+  now: Date,
+): boolean {
+  return (
+    booking.startAt.getTime() + booking.durationMinutes * 60_000 > now.getTime()
+  );
+}
+
+function isBookingActionable(
+  booking: { status: BookingStatus; startAt: Date; durationMinutes: number },
+  now: Date,
+): boolean {
+  return (
+    (booking.status === BookingStatus.PENDING_APPROVAL ||
+      booking.status === BookingStatus.CONFIRMATION_ERROR) &&
+    isBookingFuture(booking, now)
+  );
 }
 
 function dateAndTimeInZone(

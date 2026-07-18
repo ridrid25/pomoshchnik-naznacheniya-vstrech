@@ -22,6 +22,7 @@
     availabilityNote: $('availabilityNote'), availabilityState: $('availabilityState'), weekLabel: $('weekLabel'),
     previousWeek: $('previousWeek'), nextWeek: $('nextWeek'),
     bookingList: $('bookingList'), bookingsState: $('bookingsState'), bookingsCount: $('bookingsCount'),
+    bookingsScopeHint: $('bookingsScopeHint'),
     activeCount: $('activeCount'), archiveCount: $('archiveCount'),
     detailCard: $('bookingDetailCard'), detailActions: $('bookingDetailActions'),
     notificationChannel: $('notificationChannel'), notificationEmail: $('notificationEmail'),
@@ -512,12 +513,15 @@
   function renderBookings() {
     const bookings = state.bookingsByScope[state.bookingScope];
     elements.bookingsCount.textContent = bookings.length;
+    elements.bookingsScopeHint.textContent = state.bookingScope === 'active'
+      ? 'Здесь только предстоящие встречи'
+      : 'Здесь хранятся прошедшие и закрытые записи';
     elements.bookingList.innerHTML = bookings.map(renderBookingCard).join('');
     elements.bookingsState.textContent = bookings.length
       ? ''
       : state.bookingScope === 'active'
         ? 'Активных записей пока нет'
-        : 'Архив пока пуст';
+        : 'История пока пуста';
     elements.bookingsState.classList.toggle('is-hidden', bookings.length > 0);
   }
 
@@ -1325,6 +1329,12 @@
   }
 
   function bookingStatus(booking) {
+    if (
+      new Date(booking.endAt).getTime() <= Date.now() &&
+      ['PENDING_APPROVAL', 'CONFIRMATION_ERROR'].includes(booking.status)
+    ) {
+      return { label: 'Дата прошла', className: 'past', icon: '•' };
+    }
     const statuses = {
       PENDING_APPROVAL: { label: booking.type === 'RESCHEDULE' ? 'Перенос на согласовании' : 'На согласовании', className: 'pending', icon: '' },
       CONFIRMED: { label: new Date(booking.endAt) > new Date() ? 'Подтверждено' : 'Завершено', className: 'confirmed', icon: '✓' },

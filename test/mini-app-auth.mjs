@@ -576,6 +576,67 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       ),
     );
 
+    const pastStartAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    const pastDatabase = new Database(databasePath);
+    try {
+      pastDatabase.prepare(
+        "UPDATE Booking SET status = 'PENDING_APPROVAL', startAt = ? WHERE id = ?",
+      ).run(pastStartAt, firstBookingBody.booking.id);
+    } finally {
+      pastDatabase.close();
+    }
+    const activeAfterPast = await fetch(
+      `${origin}/api/mini-app/v1/bookings?scope=active`,
+      { headers: { cookie: regularCookie } },
+    ).then((response) => response.json());
+    assert.ok(
+      !activeAfterPast.bookings.some(
+        (booking) => booking.id === firstBookingBody.booking.id,
+      ),
+    );
+    const historyAfterPast = await fetch(
+      `${origin}/api/mini-app/v1/bookings?scope=archive`,
+      { headers: { cookie: regularCookie } },
+    ).then((response) => response.json());
+    assert.ok(
+      historyAfterPast.bookings.some(
+        (booking) => booking.id === firstBookingBody.booking.id,
+      ),
+    );
+    const pastDetail = await fetch(
+      `${origin}/api/mini-app/v1/bookings/${firstBookingBody.booking.id}`,
+      { headers: { cookie: regularCookie } },
+    ).then((response) => response.json());
+    assert.equal(pastDetail.booking.canCancel, false);
+    const pendingAfterPast = await fetch(
+      `${origin}/api/mini-app/v1/admin/bookings?scope=pending`,
+      { headers: { cookie } },
+    ).then((response) => response.json());
+    assert.ok(
+      !pendingAfterPast.bookings.some(
+        (booking) => booking.id === firstBookingBody.booking.id,
+      ),
+    );
+    const recentAfterPast = await fetch(
+      `${origin}/api/mini-app/v1/admin/bookings?scope=recent`,
+      { headers: { cookie } },
+    ).then((response) => response.json());
+    const pastAdminBooking = recentAfterPast.bookings.find(
+      (booking) => booking.id === firstBookingBody.booking.id,
+    );
+    assert.ok(pastAdminBooking);
+    assert.equal(pastAdminBooking.queueState, 'PROCESSED');
+    assert.equal(pastAdminBooking.canConfirm, false);
+    assert.equal(pastAdminBooking.canReject, false);
+    const pastDecision = await decideBooking(
+      origin,
+      origin,
+      cookie,
+      firstBookingBody.booking.id,
+      'confirm',
+    );
+    assert.equal(pastDecision.status, 409);
+
     const wrongBookingOrigin = await createBooking(
       origin,
       'https://attacker.example',

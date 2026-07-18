@@ -69,10 +69,18 @@ export class MiniAppUserBookingsController {
       take: 100,
     });
     const now = new Date();
+    const scopedBookings = bookings.filter(
+      (booking) => isActive(booking, now) === (scope === 'active'),
+    );
+    scopedBookings.sort((left, right) =>
+      scope === 'active'
+        ? left.startAt.getTime() - right.startAt.getTime()
+        : right.startAt.getTime() - left.startAt.getTime(),
+    );
     return {
-      bookings: bookings
-        .filter((booking) => isActive(booking, now) === (scope === 'active'))
-        .map((booking) => toUserBookingContract(booking, now)),
+      bookings: scopedBookings.map((booking) =>
+        toUserBookingContract(booking, now),
+      ),
     };
   }
 
@@ -264,6 +272,8 @@ function parseScope(value: string | undefined): 'active' | 'archive' {
 }
 
 function isActive(booking: BookingWithCalendar, now: Date): boolean {
+  const endAt = booking.startAt.getTime() + booking.durationMinutes * 60_000;
+  if (endAt <= now.getTime()) return false;
   if (
     booking.status === BookingStatus.PENDING_APPROVAL ||
     booking.status === BookingStatus.CONFIRMATION_ERROR
@@ -271,7 +281,7 @@ function isActive(booking: BookingWithCalendar, now: Date): boolean {
     return true;
   }
   if (booking.status !== BookingStatus.CONFIRMED) return false;
-  return booking.startAt.getTime() + booking.durationMinutes * 60_000 > now.getTime();
+  return true;
 }
 
 function toUserBookingContract(
@@ -304,7 +314,7 @@ function toUserBookingContract(
     googleCalendarDayUrl,
     calendarSyncStatus: booking.calendarEvent?.syncStatus ?? null,
     canCancel:
-      booking.status === BookingStatus.PENDING_APPROVAL ||
+      (booking.status === BookingStatus.PENDING_APPROVAL && inFuture) ||
       (booking.status === BookingStatus.CONFIRMED && inFuture),
     canReschedule: booking.status === BookingStatus.CONFIRMED && inFuture,
     canRetry: booking.status === BookingStatus.SLOT_UNAVAILABLE,
