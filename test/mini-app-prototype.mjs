@@ -40,6 +40,8 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(css, /--type-control: 16px/u);
   assert.match(css, /Mobile readability pass/u);
   assert.match(css, /\.work-period-row input \{ height: 48px/u);
+  assert.match(css, /@media \(max-width: 480px\)/u);
+  assert.match(css, /\.work-period-dash \{ display: none; \}/u);
   assert.match(css, /\.bottom-nav button \{ font-size: var\(--type-caption\)/u);
   assert.match(javascript, /setWizardStep/u);
   assert.match(javascript, /availability\/slots/u);
