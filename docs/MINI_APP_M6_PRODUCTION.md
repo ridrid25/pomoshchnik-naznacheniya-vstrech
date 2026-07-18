@@ -3,7 +3,8 @@
 ## Что реализовано
 
 - Mini App открывается из главного меню бота кнопкой `✨ Открыть приложение`.
-- При старте бот вызывает `setChatMenuButton` и назначает стандартную кнопку меню типа `web_app` на `${PUBLIC_BASE_URL}/mini-app`.
+- При старте бот вызывает `setChatMenuButton` и назначает стандартную кнопку меню типа `commands`, чтобы рабочие команды бота всегда оставались доступны.
+- Production Mini App открывается отдельной кнопкой `web_app` «Открыть приложение» в сообщении главного меню.
 - Frontend собирается внутри того же Docker-образа, что и backend.
 - Release-архив GitHub Actions включает `prototype/`, необходимый Docker build-stage.
 - Локальная проверка deploy блокирует переключение релиза, если `/mini-app` или `/mini-app/app.js` не отдаются корректно.
@@ -47,7 +48,7 @@ sh scripts/verify-production-mini-app.sh /opt/meeting-assistant
 ```text
 MINI_APP_STATUS=ready
 MINI_APP_URL=https://meeting.85.198.98.201.sslip.io/mini-app
-MENU_BUTTON=web_app
+MENU_BUTTON=commands
 ```
 
 После этого откройте личный чат с ботом, нажмите `/start`, затем `✨ Открыть приложение`. Telegram должен передать подписанный `initData`, а Mini App — открыть обычный интерфейс без demo-режима.

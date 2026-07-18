@@ -113,7 +113,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       { command: 'notifications', description: 'Канал уведомлений' },
       { command: 'admin', description: 'Управление встречами' },
     ]);
-    await this.configureMiniAppMenu();
+    await this.configureTelegramMenu();
 
     if (!this.devPolling) {
       this.logger.logEvent('BotFlowService', 'telegram.webhook.ready');
@@ -822,28 +822,25 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private async configureMiniAppMenu(): Promise<void> {
-    if (!this.bot || !this.miniAppUrl) {
-      this.logger.logEvent('BotFlowService', 'telegram.mini_app.disabled');
+  private async configureTelegramMenu(): Promise<void> {
+    if (!this.bot) {
+      this.logger.logEvent('BotFlowService', 'telegram.command_menu.disabled');
       return;
     }
     try {
       await this.bot.api.setChatMenuButton({
         menu_button: {
-          type: 'web_app',
-          text: 'Записаться',
-          web_app: { url: this.miniAppUrl },
+          type: 'commands',
         },
       });
       this.logger.logEvent(
         'BotFlowService',
-        'telegram.mini_app.menu_configured',
-        { mini_app_url: this.miniAppUrl },
+        'telegram.command_menu.configured',
       );
     } catch (error: unknown) {
       this.logger.errorEvent(
         'BotFlowService',
-        'telegram.mini_app.menu_configuration_failed',
+        'telegram.command_menu.configuration_failed',
         { error_message: errorMessage(error) },
       );
     }

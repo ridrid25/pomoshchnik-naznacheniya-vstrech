@@ -87,7 +87,7 @@ curl --fail --silent --show-error "https://DOMAIN/mini-app/app.js" | grep 'idemp
 sh scripts/verify-production-mini-app.sh /opt/meeting-assistant
 ```
 
-При каждом старте backend настраивает стандартную кнопку меню Telegram через `setChatMenuButton`. Она должна иметь тип `web_app` и вести строго на `https://DOMAIN/mini-app`.
+При каждом старте backend настраивает стандартную кнопку меню Telegram через `setChatMenuButton`. Она должна иметь тип `commands` и раскрывать рабочие команды бота. Mini App открывается отдельной кнопкой `web_app` в сообщении главного меню и ведёт строго на `https://DOMAIN/mini-app`.
 
 ## 5. Установка Telegram webhook
 

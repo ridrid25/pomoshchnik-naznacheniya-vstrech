@@ -46,8 +46,7 @@ me_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-ti
 
 menu_button=$(curl --fail --silent --show-error --max-time 15 \
   "https://api.telegram.org/bot${bot_token}/getChatMenuButton")
-printf '%s' "$menu_button" | grep -Fq '"type":"web_app"'
-printf '%s' "$menu_button" | grep -Fq "\"url\":\"${mini_app_url}\""
+printf '%s' "$menu_button" | grep -Fq '"type":"commands"'
 
 bot_identity=$(curl --fail --silent --show-error --max-time 15 \
   "https://api.telegram.org/bot${bot_token}/getMe")
@@ -56,5 +55,5 @@ bot_username=$(printf '%s' "$bot_identity" | sed -n 's/.*"username":"\([^"]*\)".
 printf '%s' "$html" | grep -Fq "https://t.me/${bot_username}"
 
 unset bot_token session_secret
-printf 'MINI_APP_STATUS=ready\nMINI_APP_URL=%s\nBOT_USERNAME=@%s\nMENU_BUTTON=web_app\n' \
+printf 'MINI_APP_STATUS=ready\nMINI_APP_URL=%s\nBOT_USERNAME=@%s\nMENU_BUTTON=commands\n' \
   "$mini_app_url" "$bot_username"

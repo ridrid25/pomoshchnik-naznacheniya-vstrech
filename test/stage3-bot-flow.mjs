@@ -100,8 +100,15 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
     const menuButtonRequest = telegramRequests.find(
       (request) => request.method === 'setChatMenuButton',
     );
-    assert.equal(menuButtonRequest?.body.menu_button?.type, 'web_app');
-    assert.equal(menuButtonRequest?.body.menu_button?.web_app?.url, miniAppUrl);
+    assert.equal(menuButtonRequest?.body.menu_button?.type, 'commands');
+    assert.equal(menuButtonRequest?.body.menu_button?.web_app, undefined);
+    const commandsRequest = telegramRequests.find(
+      (request) => request.method === 'setMyCommands',
+    );
+    assert.deepEqual(
+      commandsRequest?.body.commands?.map((item) => item.command),
+      ['start', 'menu', 'book', 'bookings', 'notifications', 'admin'],
+    );
 
     try {
       await sendMessageUpdate(9001, '/start');
