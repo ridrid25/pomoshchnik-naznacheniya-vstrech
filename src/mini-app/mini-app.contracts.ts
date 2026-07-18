@@ -149,6 +149,7 @@ export interface MiniAppAdminRestrictionContract {
   startMinute: number | null;
   endMinute: number | null;
   comment: string | null;
+  calendarSyncStatus: 'PENDING' | 'SYNCED' | 'ERROR';
   createdAt: string;
 }
 

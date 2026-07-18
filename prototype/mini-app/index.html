@@ -293,16 +293,21 @@
         <p class="availability-state" id="adminSettingsState" role="status">Загружаем настройки…</p>
         <div id="adminSettingsContent" class="admin-settings-content is-hidden">
           <article class="integration-status-card" id="googleIntegrationCard"></article>
+          <button class="unavailable-time-entry" type="button" data-nav="admin-restrictions">
+            <span class="unavailable-time-icon" aria-hidden="true">×</span>
+            <span><small>Главная настройка</small><strong>Когда ко мне нельзя записаться</strong><em>Добавьте занятое время — оно исчезнет из записи и появится в Google Calendar.</em></span>
+            <span class="unavailable-time-count" id="restrictionCount">0</span>
+          </button>
           <form class="schedule-settings-card" id="scheduleSettingsForm">
             <div class="settings-section-head">
-              <div><p class="eyebrow">Правила записи</p><h2>Основное расписание</h2></div>
+              <div><p class="eyebrow">Дополнительные правила</p><h2>Общие границы записи</h2></div>
               <label class="timezone-select"><span>Часовой пояс</span><select id="scheduleTimezone" aria-label="Часовой пояс расписания"><option value="Europe/Kaliningrad">Калининград · UTC+2</option><option value="Europe/Moscow">Москва · UTC+3</option><option value="Europe/Samara">Самара · UTC+4</option><option value="Asia/Yekaterinburg">Екатеринбург · UTC+5</option><option value="Asia/Omsk">Омск · UTC+6</option><option value="Asia/Krasnoyarsk">Красноярск · UTC+7</option><option value="Asia/Irkutsk">Иркутск · UTC+8</option><option value="Asia/Yakutsk">Якутск · UTC+9</option><option value="Asia/Vladivostok">Владивосток · UTC+10</option><option value="Asia/Magadan">Магадан · UTC+11</option><option value="Asia/Kamchatka">Камчатка · UTC+12</option></select></label>
             </div>
-            <section class="week-schedule-editor" aria-labelledby="weekScheduleTitle">
-              <div class="week-schedule-head"><div><p class="eyebrow">Рабочая неделя</p><h3 id="weekScheduleTitle">Когда ко мне можно записаться</h3></div><span>Интервал времени — 15 минут</span></div>
-              <p class="week-schedule-help">Включите дни, когда вы принимаете встречи. Для каждого дня укажите начало и конец работы. При необходимости можно добавить ещё один промежуток времени, например после обеда.</p>
+            <details class="week-schedule-editor">
+              <summary class="week-schedule-head"><div><p class="eyebrow">Защита от ночных записей</p><h3 id="weekScheduleTitle">Обычные часы встречи</h3></div><span>Изменить</span></summary>
+              <p class="week-schedule-help">Это только общие границы дня. Конкретную занятость добавляйте выше — в разделе «Когда ко мне нельзя записаться».</p>
               <div class="working-periods" id="workingPeriods"></div>
-            </section>
+            </details>
             <div class="settings-fields">
               <label><span>Запись не позднее чем за</span><select id="minimumLeadTimeMinutes"><option value="60">1 час</option><option value="180">3 часа</option><option value="720">12 часов</option><option value="1440">24 часа</option><option value="2880">48 часов</option></select></label>
               <label><span>Показывать даты вперёд</span><select id="bookingHorizonDays"><option value="7">7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option><option value="60">60 дней</option><option value="90">90 дней</option></select></label>
@@ -315,22 +320,22 @@
           <section class="admin-tools-overview" aria-labelledby="adminToolsTitle">
             <div class="settings-section-head"><div><p class="eyebrow">Следующие разделы</p><h2 id="adminToolsTitle">Контроль записей</h2></div></div>
             <div class="admin-tool-metrics">
-              <button type="button" data-nav="admin-restrictions"><span class="metric-icon warm">◷</span><strong id="restrictionCount">0</strong><small>Закрытые даты</small></button>
               <button type="button" data-nav="admin-blocked-users"><span class="metric-icon coral">!</span><strong id="blockedUserCount">0</strong><small>Заблокированы</small></button>
               <button type="button" data-nav="admin-templates"><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></button>
             </div>
-            <p>Здесь можно закрыть даты для записи, разблокировать пользователя и изменить тексты уведомлений.</p>
+            <p>Здесь можно разблокировать пользователя и изменить тексты уведомлений.</p>
           </section>
         </div>
       </section>
 
       <section class="screen" data-screen="admin-restrictions" aria-labelledby="adminRestrictionsTitle">
         <div class="page-heading">
-          <div><p class="eyebrow">Центр управления</p><h1 id="adminRestrictionsTitle">Закрытые даты</h1></div>
+          <div><p class="eyebrow">Настройки занятости</p><h1 id="adminRestrictionsTitle">Когда ко мне нельзя записаться</h1></div>
           <span class="format-chip personal">Расписание</span>
         </div>
         <form class="restriction-form" id="restrictionForm">
-          <div class="settings-section-head"><div><p class="eyebrow">Новое ограничение</p><h2>Убрать время из записи</h2></div></div>
+          <div class="settings-section-head"><div><p class="eyebrow">Добавить занятость</p><h2>Закрыть день или время</h2></div></div>
+          <p class="restriction-explainer">Выбранное время сразу пропадёт у клиентов и будет отмечено занятым в вашем Google Calendar.</p>
           <div class="restriction-fields">
             <label><span>Дата</span><input id="restrictionDate" type="date" required></label>
             <label><span>Что закрыть</span><select id="restrictionType"><option value="FULL_DAY">Весь день</option><option value="TIME_INTERVAL">Интервал времени</option></select></label>
@@ -342,7 +347,7 @@
           <label class="restriction-comment"><span>Комментарий — необязательно</span><textarea id="restrictionComment" maxlength="500" placeholder="Например: личные дела"></textarea></label>
           <button class="primary-button full-width" id="saveRestriction" type="submit">Закрыть время</button>
         </form>
-        <div class="restriction-list-head"><div><p class="eyebrow">Будущие ограничения</p><h2>Недоступное время</h2></div><span id="restrictionListCount">0</span></div>
+        <div class="restriction-list-head"><div><p class="eyebrow">Предстоящая занятость</p><h2>Когда запись закрыта</h2></div><span id="restrictionListCount">0</span></div>
         <p class="availability-state" id="restrictionsState" role="status">Загружаем ограничения…</p>
         <div class="restriction-list" id="restrictionList"></div>
       </section>

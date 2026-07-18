@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  BadGatewayException,
   Body,
   Controller,
   Delete,
@@ -13,7 +14,8 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../database/prisma.service';
-import { RestrictionType } from '../generated/prisma/client';
+import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
+import { CalendarSyncStatus, RestrictionType } from '../generated/prisma/client';
 import { MiniAppAdminGuard } from './auth/mini-app-admin.guard';
 import { MiniAppAuthGuard } from './auth/mini-app-auth.guard';
 import { MiniAppOriginGuard } from './auth/mini-app-origin.guard';
@@ -30,7 +32,10 @@ interface RestrictionBody {
 @Controller('api/mini-app/v1/admin/restrictions')
 @UseGuards(MiniAppAuthGuard, MiniAppAdminGuard)
 export class MiniAppAdminRestrictionsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly googleCalendar: GoogleCalendarService,
+  ) {}
 
   @Get()
   async list(): Promise<{
@@ -82,10 +87,29 @@ export class MiniAppAdminRestrictionsController {
       where: { date: restrictionDate, type, startMinute, endMinute },
     });
     if (existing) return { restriction: toContract(existing), created: false };
-    const restriction = await this.prisma.availabilityRestriction.create({
+    let restriction = await this.prisma.availabilityRestriction.create({
       data: { date: restrictionDate, type, startMinute, endMinute, comment },
     });
+    restriction = await this.syncWithCalendar(restriction, timezone, false);
     return { restriction: toContract(restriction), created: true };
+  }
+
+  @Post(':id/sync')
+  @UseGuards(MiniAppOriginGuard)
+  @HttpCode(HttpStatus.OK)
+  async sync(@Param('id') id: string): Promise<{
+    restriction: MiniAppAdminRestrictionContract;
+  }> {
+    const restriction = await this.prisma.availabilityRestriction.findUnique({
+      where: { id },
+    });
+    if (!restriction) throw new NotFoundException('Ограничение не найдено');
+    const timezone = await this.getTimezone();
+    return {
+      restriction: toContract(
+        await this.syncWithCalendar(restriction, timezone, true),
+      ),
+    };
   }
 
   @Delete(':id')
@@ -100,8 +124,67 @@ export class MiniAppAdminRestrictionsController {
     if (restriction.date < logicalDate(todayInTimezone(timezone))) {
       throw new BadRequestException('Прошедшее ограничение нельзя удалить');
     }
+    if (restriction.googleEventId) {
+      try {
+        await this.googleCalendar.deleteAvailabilityBlockEvent(
+          restriction.googleEventId,
+        );
+      } catch {
+        throw new BadGatewayException(
+          'Не удалось убрать занятость из Google Calendar. Попробуйте ещё раз.',
+        );
+      }
+    }
     await this.prisma.availabilityRestriction.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  private async syncWithCalendar(
+    restriction: RestrictionRecord,
+    timezone: string,
+    failOnError: boolean,
+  ): Promise<RestrictionRecord> {
+    if (
+      restriction.calendarSyncStatus === CalendarSyncStatus.SYNCED &&
+      restriction.googleEventId
+    ) {
+      return restriction;
+    }
+    const googleStatus = await this.googleCalendar.getStatus();
+    if (!googleStatus.authorized) {
+      if (failOnError) {
+        throw new BadRequestException('Сначала подключите Google Calendar');
+      }
+      return restriction;
+    }
+    try {
+      const googleEventId = await this.googleCalendar.createAvailabilityBlockEvent({
+        restrictionId: restriction.id,
+        date: restriction.date.toISOString().slice(0, 10),
+        startMinute: restriction.startMinute,
+        endMinute: restriction.endMinute,
+        timezone,
+        comment: restriction.comment,
+      });
+      return await this.prisma.availabilityRestriction.update({
+        where: { id: restriction.id },
+        data: {
+          googleEventId,
+          calendarSyncStatus: CalendarSyncStatus.SYNCED,
+        },
+      });
+    } catch {
+      const failed = await this.prisma.availabilityRestriction.update({
+        where: { id: restriction.id },
+        data: { calendarSyncStatus: CalendarSyncStatus.ERROR },
+      });
+      if (failOnError) {
+        throw new BadGatewayException(
+          'Время закрыто для записи, но Google Calendar пока не обновился. Повторите синхронизацию.',
+        );
+      }
+      return failed;
+    }
   }
 
   private async getTimezone(): Promise<string> {
@@ -114,6 +197,19 @@ export class MiniAppAdminRestrictionsController {
   }
 }
 
+interface RestrictionRecord {
+  id: string;
+  date: Date;
+  type: RestrictionType;
+  startMinute: number | null;
+  endMinute: number | null;
+  comment: string | null;
+  googleEventId: string | null;
+  calendarSyncStatus: CalendarSyncStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 function toContract(restriction: {
   id: string;
   date: Date;
@@ -121,6 +217,7 @@ function toContract(restriction: {
   startMinute: number | null;
   endMinute: number | null;
   comment: string | null;
+  calendarSyncStatus: CalendarSyncStatus;
   createdAt: Date;
 }): MiniAppAdminRestrictionContract {
   return {
@@ -130,6 +227,12 @@ function toContract(restriction: {
     startMinute: restriction.startMinute,
     endMinute: restriction.endMinute,
     comment: restriction.comment,
+    calendarSyncStatus:
+      restriction.calendarSyncStatus === CalendarSyncStatus.SYNCED
+        ? 'SYNCED'
+        : restriction.calendarSyncStatus === CalendarSyncStatus.ERROR
+          ? 'ERROR'
+          : 'PENDING',
     createdAt: restriction.createdAt.toISOString(),
   };
 }

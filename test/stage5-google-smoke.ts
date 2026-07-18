@@ -76,6 +76,10 @@ async function main(): Promise<void> {
             },
           };
         },
+        delete: async (params: Record<string, unknown>) => {
+          calls.push({ method: 'events.delete', params });
+          return { data: {} };
+        },
       },
     };
     (google as unknown as { calendar: () => unknown }).calendar = () => fakeCalendar;
@@ -239,6 +243,42 @@ async function main(): Promise<void> {
     assert.equal(insertWithoutEmail?.params.conferenceDataVersion, undefined);
     assert.equal(bodyWithoutEmail.conferenceData, undefined);
 
+    const availabilityBlockId = await service.createAvailabilityBlockEvent({
+      restrictionId: 'restriction-stage5',
+      date: '2030-01-18',
+      startMinute: 16 * 60,
+      endMinute: 17 * 60,
+      timezone: 'Europe/Moscow',
+      comment: 'Личные дела',
+    });
+    assert.equal(availabilityBlockId, 'google-stage5-event-4');
+    const availabilityInsert = calls.filter(
+      (call) => call.method === 'events.insert',
+    )[3];
+    const availabilityBody = availabilityInsert?.params.requestBody as {
+      summary: string;
+      transparency: string;
+      colorId: string;
+      start: { dateTime: string; timeZone: string };
+      end: { dateTime: string; timeZone: string };
+      extendedProperties: { private: { availabilityRestrictionId: string } };
+    };
+    assert.equal(availabilityBody.summary, '⛔ Недоступно для записи');
+    assert.equal(availabilityBody.transparency, 'opaque');
+    assert.equal(availabilityBody.colorId, '11');
+    assert.equal(availabilityBody.start.dateTime, '2030-01-18T16:00:00');
+    assert.equal(availabilityBody.end.dateTime, '2030-01-18T17:00:00');
+    assert.equal(
+      availabilityBody.extendedProperties.private.availabilityRestrictionId,
+      'restriction-stage5',
+    );
+    await service.deleteAvailabilityBlockEvent(availabilityBlockId);
+    const availabilityDelete = calls.find(
+      (call) => call.method === 'events.delete',
+    );
+    assert.equal(availabilityDelete?.params.eventId, availabilityBlockId);
+    assert.equal(availabilityDelete?.params.sendUpdates, 'none');
+
     await service.cancelEvent(created.googleEventId);
     const cancellation = calls.find((call) => {
       const requestBody = call.params.requestBody as { status?: string } | undefined;
@@ -259,6 +299,7 @@ async function main(): Promise<void> {
         in_person_without_meet_checked: true,
         cancellation_checked: true,
         pending_event_lifecycle_checked: true,
+        availability_block_sync_checked: true,
       })}\n`,
     );
   } finally {

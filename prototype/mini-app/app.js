@@ -866,9 +866,16 @@
         : `${minuteTime(restriction.startMinute)}–${minuteTime(restriction.endMinute)}`;
       const month = new Intl.DateTimeFormat('ru-RU', { month: 'short' })
         .format(new Date(`${restriction.date}T12:00:00`)).replace('.', '').toUpperCase();
-      return `<article class="restriction-card"><div class="restriction-date"><span>${escapeHtml(month)}</span><strong>${Number(restriction.date.slice(8, 10))}</strong></div><div><h3>${escapeHtml(formatLongDate(restriction.date))}</h3><p>${escapeHtml(interval)}${restriction.comment ? ` · ${escapeHtml(restriction.comment)}` : ''}</p></div><button type="button" data-delete-restriction-id="${escapeHtml(restriction.id)}" aria-label="Удалить ограничение">×</button></article>`;
+      const synced = restriction.calendarSyncStatus === 'SYNCED';
+      const calendarState = synced
+        ? '<span class="restriction-calendar-state">✓ Видно в Google Calendar</span>'
+        : '<span class="restriction-calendar-state pending">! В календарь ещё не добавлено</span>';
+      const syncAction = synced
+        ? ''
+        : `<button class="restriction-sync-button" type="button" data-sync-restriction-id="${escapeHtml(restriction.id)}">Добавить в календарь</button>`;
+      return `<article class="restriction-card"><div class="restriction-date"><span>${escapeHtml(month)}</span><strong>${Number(restriction.date.slice(8, 10))}</strong></div><div><h3>${escapeHtml(formatLongDate(restriction.date))}</h3><p>${escapeHtml(interval)}${restriction.comment ? ` · ${escapeHtml(restriction.comment)}` : ''}</p>${calendarState}</div><div class="restriction-card-actions">${syncAction}<button class="restriction-delete-button" type="button" data-delete-restriction-id="${escapeHtml(restriction.id)}" aria-label="Удалить занятость">×</button></div></article>`;
     }).join('');
-    elements.restrictionsState.textContent = state.restrictions.length ? '' : 'Будущих ограничений пока нет';
+    elements.restrictionsState.textContent = state.restrictions.length ? '' : 'Предстоящей занятости пока нет';
     elements.restrictionsState.classList.toggle('is-hidden', state.restrictions.length > 0);
   }
 
@@ -894,7 +901,12 @@
     try {
       const result = await api('/admin/restrictions', { method: 'POST', body: JSON.stringify(payload) });
       elements.restrictionComment.value = '';
-      showToast(result.created ? 'Время закрыто для записи' : 'Такое ограничение уже существует');
+      const message = !result.created
+        ? 'Такая занятость уже добавлена'
+        : result.restriction.calendarSyncStatus === 'SYNCED'
+          ? 'Время закрыто и добавлено в Google Calendar'
+          : 'Время закрыто. Google Calendar можно синхронизировать кнопкой ниже';
+      showToast(message);
       await loadRestrictions();
       tg?.HapticFeedback?.notificationOccurred('success');
     } catch (error) {
@@ -905,12 +917,32 @@
     }
   }
 
+  async function syncRestriction(id) {
+    const button = document.querySelector(`[data-sync-restriction-id="${CSS.escape(id)}"]`);
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Добавляем…';
+    }
+    try {
+      await api(`/admin/restrictions/${encodeURIComponent(id)}/sync`, { method: 'POST' });
+      await loadRestrictions();
+      showToast('Занятость добавлена в Google Calendar');
+      tg?.HapticFeedback?.notificationOccurred('success');
+    } catch (error) {
+      showToast(error.message || 'Не удалось обновить Google Calendar');
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Добавить в календарь';
+      }
+    }
+  }
+
   function askDeleteRestriction(id) {
     state.pendingRestrictionDeleteId = id;
     state.pendingAdminAction = null;
     state.pendingCancelId = null;
-    elements.modalTitle.textContent = 'Удалить ограничение?';
-    elements.modalText.textContent = 'Это время снова появится среди доступных окон.';
+    elements.modalTitle.textContent = 'Удалить занятость?';
+    elements.modalText.textContent = 'Это время снова появится для записи и будет удалено из Google Calendar.';
     elements.modalIcon.textContent = '!';
     elements.modalReasonBlock.classList.add('is-hidden');
     elements.modalClose.classList.add('is-hidden');
@@ -931,7 +963,7 @@
       await api(`/admin/restrictions/${encodeURIComponent(id)}`, { method: 'DELETE' });
       closeModal();
       await loadRestrictions();
-      showToast('Ограничение удалено');
+      showToast('Занятость удалена');
     } catch (error) {
       showToast(error.message || 'Не удалось удалить ограничение');
     } finally {
@@ -1426,6 +1458,7 @@
     }
     if (button.dataset.adminBookingId) { void openAdminBooking(button.dataset.adminBookingId); return; }
     if (button.dataset.deleteRestrictionId) { askDeleteRestriction(button.dataset.deleteRestrictionId); return; }
+    if (button.dataset.syncRestrictionId) { void syncRestriction(button.dataset.syncRestrictionId); return; }
     if (button.dataset.unblockUserId) { askUnblockUser(button.dataset.unblockUserId, button.dataset.unblockUserName || 'Пользователь'); return; }
     if (button.dataset.templateType) { openTemplateEditor(button.dataset.templateType); return; }
     if (button.dataset.insertPlaceholder) { insertPlaceholder(button.dataset.insertPlaceholder); return; }

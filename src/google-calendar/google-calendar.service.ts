@@ -35,6 +35,15 @@ export interface CreatedGoogleEvent {
   googleMeetUrl: string | null;
 }
 
+export interface CreateAvailabilityBlockEventInput {
+  restrictionId: string;
+  date: string;
+  startMinute: number | null;
+  endMinute: number | null;
+  timezone: string;
+  comment: string | null;
+}
+
 interface TokenCredentials {
   access_token?: string | null;
   refresh_token?: string | null;
@@ -213,6 +222,83 @@ export class GoogleCalendarService {
       return { googleEventId: response.data.id, googleMeetUrl: meetUrl };
     } catch (error: unknown) {
       await this.reportFailure('google.event.create_failed', error);
+      throw error;
+    }
+  }
+
+  async createAvailabilityBlockEvent(
+    input: CreateAvailabilityBlockEventInput,
+  ): Promise<string> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      const allDay = input.startMinute === null || input.endMinute === null;
+      const response = await calendar.events.insert({
+        calendarId: this.calendarId,
+        sendUpdates: 'none',
+        requestBody: {
+          summary: '⛔ Недоступно для записи',
+          description: [
+            'Это время закрыто для записи через помощника.',
+            input.comment ? `Комментарий: ${input.comment}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+          start: allDay
+            ? { date: input.date }
+            : {
+                dateTime: localDateTime(input.date, input.startMinute!),
+                timeZone: input.timezone,
+              },
+          end: allDay
+            ? { date: addUtcDays(input.date, 1) }
+            : {
+                dateTime: localDateTime(input.date, input.endMinute!),
+                timeZone: input.timezone,
+              },
+          status: 'confirmed',
+          transparency: 'opaque',
+          colorId: '11',
+          visibility: 'private',
+          reminders: { useDefault: false, overrides: [] },
+          extendedProperties: {
+            private: {
+              availabilityRestrictionId: input.restrictionId,
+              bookingState: 'blocked_by_owner',
+            },
+          },
+        },
+      });
+      if (!response.data.id) {
+        throw new Error('Google Calendar returned no availability block event id');
+      }
+      this.logger.logEvent(
+        'GoogleCalendarService',
+        'google.availability_block.created',
+        { google_event_id: response.data.id, restriction_id: input.restrictionId },
+      );
+      return response.data.id;
+    } catch (error: unknown) {
+      await this.reportFailure('google.availability_block.create_failed', error);
+      throw error;
+    }
+  }
+
+  async deleteAvailabilityBlockEvent(googleEventId: string): Promise<void> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      await calendar.events.delete({
+        calendarId: this.calendarId,
+        eventId: googleEventId,
+        sendUpdates: 'none',
+      });
+      this.logger.logEvent(
+        'GoogleCalendarService',
+        'google.availability_block.deleted',
+        { google_event_id: googleEventId },
+      );
+    } catch (error: unknown) {
+      if (googleNotFound(error)) return;
+      await this.reportFailure('google.availability_block.delete_failed', error);
       throw error;
     }
   }
@@ -476,6 +562,25 @@ export class GoogleCalendarService {
       if (expiresAt < now) this.oauthStates.delete(state);
     }
   }
+}
+
+function localDateTime(date: string, minuteOfDay: number): string {
+  const hour = Math.floor(minuteOfDay / 60);
+  const minute = minuteOfDay % 60;
+  return `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+}
+
+function addUtcDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function googleNotFound(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: unknown; response?: { status?: unknown } };
+  return candidate.code === 404 || candidate.code === 410 ||
+    candidate.response?.status === 404 || candidate.response?.status === 410;
 }
 
 function dateInTimeZone(value: Date, timeZone: string): string {

@@ -780,6 +780,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(createdRestriction.created, true);
     assert.equal(createdRestriction.restriction.date, restrictionDate);
     assert.equal(createdRestriction.restriction.type, 'FULL_DAY');
+    assert.equal(createdRestriction.restriction.calendarSyncStatus, 'PENDING');
     const duplicateRestriction = await fetch(
       `${origin}/api/mini-app/v1/admin/restrictions`,
       {

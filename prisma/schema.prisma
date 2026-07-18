@@ -198,14 +198,16 @@ model ScheduleWorkingPeriod {
 }
 
 model AvailabilityRestriction {
-  id          String          @id @default(cuid())
-  date        DateTime
-  type        RestrictionType
-  startMinute Int?
-  endMinute   Int?
-  comment     String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id                 String             @id @default(cuid())
+  date               DateTime
+  type               RestrictionType
+  startMinute        Int?
+  endMinute          Int?
+  comment            String?
+  googleEventId      String?            @unique
+  calendarSyncStatus CalendarSyncStatus @default(PENDING)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@index([date, type])
 }

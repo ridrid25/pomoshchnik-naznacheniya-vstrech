@@ -113,9 +113,9 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /toggleWorkingDay/u);
   assert.match(javascript, /addWorkingPeriod/u);
   assert.match(javascript, /validateWorkingPeriods/u);
-  assert.match(html, /Когда ко мне можно записаться/u);
-  assert.match(html, /Интервал времени — 15 минут/u);
-  assert.match(html, /добавить ещё один промежуток времени/u);
+  assert.match(html, /Обычные часы встречи/u);
+  assert.match(html, /Защита от ночных записей/u);
+  assert.match(html, /Конкретную занятость добавляйте выше/u);
   assert.match(css, /week-day-card/u);
   assert.match(css, /day-switch/u);
   assert.match(javascript, /moveByScrollStop/u);
@@ -140,8 +140,11 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /loadRestrictions/u);
   assert.match(javascript, /saveRestriction/u);
   assert.match(javascript, /deleteRestriction/u);
-  assert.match(html, /Закрытые даты/u);
-  assert.match(html, /Убрать время из записи/u);
+  assert.match(javascript, /syncRestriction/u);
+  assert.match(html, /Когда ко мне нельзя записаться/u);
+  assert.match(html, /Закрыть день или время/u);
+  assert.match(html, /появится в Google Calendar/u);
+  assert.doesNotMatch(html, /Когда ко мне можно записаться/u);
   assert.match(css, /restriction-card/u);
   assert.match(javascript, /admin\/blocked-users/u);
   assert.match(javascript, /loadBlockedUsers/u);
