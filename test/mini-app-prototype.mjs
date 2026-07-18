@@ -93,6 +93,8 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /← Вернуться в Mini App/u);
   assert.match(javascript, /calendar-return/u);
   assert.doesNotMatch(javascript, /Возврат уже добавлен/u);
+  assert.match(javascript, /window\.location\.assign\(url\.toString\(\)\)/u);
+  assert.match(javascript, /TelegramWebviewProxy/u);
   assert.match(javascript, /tgWebAppStartParam/u);
   assert.match(javascript, /openStartDestination/u);
   assert.doesNotMatch(`${html}\n${javascript}`, /контрольн(?:ый|ая|ое)|пилот|прототип/iu);

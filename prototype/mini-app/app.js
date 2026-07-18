@@ -1286,20 +1286,22 @@
       .format(new Date(startAt)).replace('.', '').toUpperCase();
   }
 
-  async function openCalendarDay(value, bookingId) {
+  function openCalendarDay(value, bookingId) {
     try {
       const url = new URL(value);
       if (url.origin !== 'https://calendar.google.com' || !url.pathname.startsWith('/calendar/')) {
         throw new Error('Некорректная ссылка календаря');
       }
       if (!/^[a-z0-9]+$/u.test(bookingId || '')) throw new Error('Заявка не найдена');
-      await api(`/admin/bookings/${bookingId}/calendar-return`, { method: 'POST' });
+      void api(`/admin/bookings/${bookingId}/calendar-return`, { method: 'POST' })
+        .catch((error) => showToast(error.message || 'Не удалось обновить ссылку возврата'));
       tg?.HapticFeedback?.selectionChanged();
-      if (tg?.openLink) {
+      const telegramCanOpenLink = Boolean(window.TelegramWebviewProxy) || window.parent !== window;
+      if (tg?.openLink && telegramCanOpenLink) {
         tg.openLink(url.toString());
         return;
       }
-      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      window.location.assign(url.toString());
     } catch (error) {
       showToast(error.message || 'Не удалось открыть Google Calendar');
     }
