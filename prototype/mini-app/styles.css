@@ -5,7 +5,7 @@
   --surface-solid: #ffffff;
   --surface-soft: #f7f7fd;
   --text: #1d1c2d;
-  --text-soft: #6f7085;
+  --text-soft: #626377;
   --line: rgba(56, 52, 96, 0.11);
   --primary: #6759e8;
   --primary-deep: #4d3fc9;
@@ -26,6 +26,10 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-viewport-height: 100vh;
+  --type-caption: 12px;
+  --type-small: 13px;
+  --type-body: 15px;
+  --type-control: 16px;
 }
 
 html[data-theme="dark"] {
@@ -121,7 +125,7 @@ h1,
 h2,
 h3,
 strong {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 h1 {
@@ -1434,6 +1438,166 @@ button:disabled { cursor: wait; }
   .wizard-actions .secondary-button { min-width: 82px; padding: 0 13px; }
   .approval-actions { grid-template-columns: 1fr; }
   .toast { white-space: normal; text-align: center; }
+}
+
+/* Mobile readability pass: no essential copy is rendered as micro-text. */
+body { font-size: var(--type-control); }
+.eyebrow { font-size: var(--type-caption); line-height: 1.35; }
+.brand-name { font-size: 17px; }
+.hero-card p { font-size: var(--type-body); line-height: 1.5; }
+.status-pill { min-height: 30px; padding: 7px 12px; font-size: var(--type-small); }
+.primary-button,
+.secondary-button,
+.danger-button,
+.outline-button { min-height: 52px; font-size: var(--type-control); }
+.text-button { min-height: 42px; font-size: var(--type-body); }
+.hero-calendar span,
+.date-tile span,
+.date-tile small { font-size: var(--type-caption); }
+.home-action-card { min-height: 88px; padding: 16px; }
+.home-action-card strong { font-size: 17px; }
+.home-action-card small { font-size: 14px; line-height: 1.4; }
+.meeting-main h3 { font-size: 18px; }
+.meeting-main p,
+.meeting-meta,
+.booking-detail-row,
+.approval-head p,
+.approval-time p,
+.field-help,
+.wizard-heading > p:last-child { font-size: 14px; line-height: 1.45; }
+.format-chip { min-height: 28px; padding: 0 10px; font-size: var(--type-caption); }
+.metric-card > span:last-child,
+.info-strip p { font-size: 14px; line-height: 1.45; }
+.stepper li span { width: 34px; height: 34px; font-size: 14px; }
+.stepper small { font-size: var(--type-caption); }
+.field-label,
+fieldset legend { font-size: var(--type-body); }
+.field-label span { font-size: var(--type-small); }
+.input-shell { min-height: 56px; }
+.input-shell input,
+textarea { font-size: var(--type-control); line-height: 1.5; }
+.choice-card { min-height: 72px; }
+.choice-card strong { font-size: var(--type-body); }
+.choice-card small { font-size: var(--type-small); line-height: 1.35; }
+.segment-control button,
+.tab-control button { min-height: 48px; font-size: 14px; }
+.day-grid button { min-height: 76px; }
+.day-grid button small { font-size: var(--type-caption); }
+.availability-note { font-size: var(--type-small); line-height: 1.4; }
+.slot-grid button { min-height: 48px; font-size: 14px; }
+.contact-highlight p,
+.switch-row small,
+.review-list dt,
+.review-list dd,
+.review-comment span,
+.approval-comment span,
+.review-comment p,
+.approval-comment p,
+.success-summary span { font-size: 14px; line-height: 1.45; }
+.booking-card-head p,
+.booking-status,
+.notification-card-head p,
+.detail-time-block span,
+.detail-list dt,
+.detail-comment span { font-size: var(--type-small); line-height: 1.4; }
+.booking-status span { width: 20px; height: 20px; font-size: 12px; }
+.calendar-review-head small,
+.calendar-review-note,
+.request-code { font-size: var(--type-caption); line-height: 1.4; }
+.calendar-review-head strong { font-size: var(--type-control); }
+.calendar-review-card > p { font-size: 14px; line-height: 1.55; }
+.calendar-review-button { min-height: 50px; font-size: var(--type-body); }
+.detail-list dd,
+.detail-comment p,
+.meet-link { font-size: var(--type-body); }
+.admin-overview span { font-size: 14px; }
+.admin-overview small,
+.reliability-head > span,
+.queue-age { min-height: 20px; font-size: var(--type-caption); line-height: 1.35; }
+.reliability-card > p,
+.admin-settings-entry small,
+.queue-warning,
+.queue-slot-state { font-size: 14px; line-height: 1.5; }
+.admin-settings-entry { min-height: 78px; padding: 16px; }
+.admin-settings-entry strong { font-size: var(--type-control); }
+.integration-status-card,
+.schedule-settings-card,
+.admin-tools-overview { padding: 20px; }
+.integration-status-card > p,
+.integration-account { font-size: 14px; line-height: 1.5; }
+.schedule-settings-card > .settings-section-head { display: grid; gap: 14px; }
+.timezone-select { min-width: 0; gap: 7px; font-size: var(--type-caption); text-align: left; }
+.timezone-select select { min-height: 50px; padding: 0 38px 0 13px; font-size: var(--type-body); }
+.week-schedule-editor { padding: 17px; }
+.week-schedule-head h3 { font-size: 17px; }
+.week-schedule-head > span { padding: 7px 10px; font-size: var(--type-caption); }
+.week-schedule-help { margin-top: 10px; font-size: var(--type-small); line-height: 1.55; }
+.working-periods { gap: 10px; margin-top: 15px; }
+.week-day-toggle { min-height: 62px; padding: 12px 13px; }
+.week-day-toggle strong { font-size: var(--type-body); }
+.week-day-toggle small { margin-top: 2px; font-size: var(--type-small); }
+.day-switch { width: 42px; height: 26px; }
+.day-switch i { width: 20px; height: 20px; }
+.week-day-card.is-enabled .day-switch i { transform: translateX(16px); }
+.work-period-list { gap: 11px; padding: 0 13px 14px; }
+.work-period-row { gap: 8px; }
+.work-period-row label { gap: 5px; font-size: var(--type-caption); }
+.work-period-row input { height: 48px; padding: 0 10px; font-size: var(--type-control); }
+.work-period-dash { margin-top: 18px; font-size: 15px; }
+.remove-work-period { width: 44px; height: 48px; font-size: 22px; }
+.add-work-period { min-height: 42px; padding: 0 13px; font-size: var(--type-small); }
+.settings-fields { gap: 13px; }
+.settings-fields label,
+.restriction-fields label,
+.restriction-time-fields label,
+.restriction-comment,
+.template-text-field { font-size: var(--type-small); }
+.settings-fields select,
+.restriction-fields input,
+.restriction-fields select,
+.restriction-time-fields input,
+.restriction-comment textarea,
+.template-text-field textarea { min-height: 50px; font-size: var(--type-control); }
+.admin-tools-overview > p,
+.blocked-users-note p,
+.template-note p { font-size: 14px; line-height: 1.55; }
+.admin-tool-metrics > button { min-height: 94px; }
+.admin-tool-metrics small { font-size: var(--type-caption); line-height: 1.3; }
+.restriction-date span,
+.restriction-card p,
+.blocked-user-card p,
+.blocked-user-card small,
+.template-card small,
+.template-card em,
+.placeholder-panel p,
+.placeholder-list code,
+.placeholder-list span { font-size: var(--type-small); line-height: 1.45; }
+.restriction-card h3,
+.blocked-user-card h3,
+.template-card strong,
+.placeholder-panel h3 { font-size: var(--type-body); }
+.template-card { min-height: 92px; padding: 16px; }
+.template-text-field textarea { min-height: 230px; }
+.approval-time strong { font-size: var(--type-body); }
+.approval-actions .primary-button,
+.approval-actions .danger-button { min-height: 50px; font-size: 14px; }
+.bottom-nav { min-height: calc(80px + var(--safe-bottom)); }
+.bottom-nav button { font-size: var(--type-caption); }
+.nav-notice { min-width: 20px; height: 20px; font-size: 10px; }
+.toast { padding: 13px 17px; font-size: 14px; line-height: 1.4; }
+.modal p { font-size: var(--type-body); line-height: 1.5; }
+
+@media (max-width: 359px) {
+  .integration-status-card,
+  .schedule-settings-card,
+  .admin-tools-overview { padding: 16px; }
+  .week-schedule-editor { padding: 13px; }
+  .work-period-list { padding-right: 10px; padding-left: 10px; }
+  .work-period-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .remove-work-period { grid-column: 1 / -1; width: 100%; height: 40px; }
+  .settings-fields { grid-template-columns: 1fr; }
+  .settings-fields label:first-child { grid-column: auto; }
+  .admin-tool-metrics { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
