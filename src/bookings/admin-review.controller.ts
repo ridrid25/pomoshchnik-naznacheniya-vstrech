@@ -205,7 +205,7 @@ function page(
   miniAppUrl: string | null = null,
 ): string {
   const miniAppAction = miniAppUrl
-    ? `<a class="mini-app-link" href="${escapeHtml(miniAppUrl)}">← Вернуться в Mini App</a>`
+    ? `<a class="mini-app-link" href="${escapeHtml(miniAppUrl)}">← Открыть заявку в Telegram</a>`
     : '';
   const calendarAction = calendarUrl
     ? `<a class="calendar-link" href="${escapeHtml(calendarUrl)}">Открыть Google Calendar</a>`

@@ -174,9 +174,9 @@ async function main(): Promise<void> {
     assert.equal(reviewPage.status, 200);
     assert.match(reviewPage.body, /Подтвердить/u);
     assert.match(reviewPage.body, /Отклонить/u);
-    assert.match(reviewPage.body, /← Вернуться в Mini App/u);
+    assert.match(reviewPage.body, /← Открыть заявку в Telegram/u);
     assert.match(reviewPage.body, /Открыть Google Calendar/u);
-    assert.match(reviewPage.body, /startapp=calendar_stage6booking/u);
+    assert.match(reviewPage.body, /start=calendar_stage6booking/u);
     assert.match(reviewPage.body, /scrollControls/u);
     assert.deepEqual(webDecisions, []);
     const invalidPage = responseRecorder();
@@ -189,7 +189,7 @@ async function main(): Promise<void> {
       decisionPage.response,
     );
     assert.equal(decisionPage.status, 200);
-    assert.match(decisionPage.body, /← Вернуться в Mini App/u);
+    assert.match(decisionPage.body, /← Открыть заявку в Telegram/u);
     assert.match(decisionPage.body, /Открыть Google Calendar/u);
     assert.doesNotMatch(decisionPage.body, /Можно закрыть эту вкладку/u);
     assert.deepEqual(webDecisions, ['confirm']);
@@ -227,11 +227,11 @@ async function main(): Promise<void> {
     );
     assert.match(
       pendingDescriptions[0],
-      /https:\/\/t\.me\/Zapiscalender_bot\?startapp=calendar_/u,
+      /https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
     );
     assert.match(
       await service.ensureCalendarReturnLink(first.id),
-      /^https:\/\/t\.me\/Zapiscalender_bot\?startapp=calendar_/u,
+      /^https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
     );
     assert.match(updatedDescriptions[0], /Открыть заявку и принять решение в Telegram/u);
     assert.ok(!updatedDescriptions[0].includes('/admin/review/'));

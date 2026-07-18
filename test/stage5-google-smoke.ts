@@ -154,11 +154,11 @@ async function main(): Promise<void> {
 
     await service.updateEventDescription(
       pending.googleEventId,
-      '← Вернуться в Mini App:\nhttps://t.me/example_bot?startapp=calendar_booking',
+      '← Открыть встречу в Telegram:\nhttps://t.me/example_bot?start=calendar_booking',
     );
     const descriptionPatch = calls.find((call) => {
       const requestBody = call.params.requestBody as { description?: string; status?: string } | undefined;
-      return call.method === 'events.patch' && requestBody?.description?.includes('Вернуться в Mini App') && !requestBody.status;
+      return call.method === 'events.patch' && requestBody?.description?.includes('Открыть встречу в Telegram') && !requestBody.status;
     });
     assert.equal(descriptionPatch?.params.eventId, pending.googleEventId);
     assert.equal(descriptionPatch?.params.sendUpdates, 'none');

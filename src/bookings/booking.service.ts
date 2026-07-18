@@ -674,7 +674,7 @@ export class BookingService {
         ? `Username: @${booking.user.telegramUsername}`
         : 'Username: отсутствует',
       '',
-      '← Вернуться в Mini App:',
+      '← Открыть встречу в Telegram:',
       createCalendarReturnUrl(booking.id),
     ]
       .filter(Boolean)

@@ -194,6 +194,19 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       const user = await this.ensureUser(ctx);
       this.drafts.delete(String(user.telegramId));
       this.pendingNotificationEmail.delete(String(user.telegramId));
+      const startPayload = /^\/start(?:@[a-z0-9_]+)?(?:\s+(.+))?$/iu
+        .exec(ctx.message?.text || '')?.[1]
+        ?.trim() || '';
+      const calendarMatch = /^calendar_([a-z0-9]+)$/u.exec(startPayload);
+      if (calendarMatch) {
+        if (!this.isAdmin(user.telegramId)) {
+          this.logFlow('admin.access.denied', user, { source: 'calendar_link' });
+          await ctx.reply('У вас нет доступа к управлению этой заявкой.');
+          return;
+        }
+        await this.showAdminBooking(ctx, calendarMatch[1]);
+        return;
+      }
       await this.showMainMenu(ctx, user);
     });
 
@@ -599,52 +612,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       await ctx.answerCallbackQuery();
       const admin = await this.ensureAdmin(ctx);
       if (!admin) return;
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: ctx.match[1] },
-        include: { user: true, calendarEvent: true },
-      });
-      if (!booking) {
-        await ctx.reply('Заявка не найдена.');
-        return;
-      }
-      const { date, time } = localDateTime(booking.startAt, booking.timezone);
-      const calendarAccountEmail = await this.googleCalendar.getAccountEmail();
-      const calendarUrl = googleCalendarDayUrl(date, calendarAccountEmail);
-      const slotAvailable =
-        booking.status === BookingStatus.PENDING_APPROVAL
-          ? await this.availability.isSlotAvailable(
-              date,
-              time,
-              booking.durationMinutes,
-              new Date(),
-              booking.id,
-            )
-          : null;
-      const keyboard = new InlineKeyboard();
-      if (booking.status === BookingStatus.PENDING_APPROVAL) {
-        keyboard
-          .text('✅ Подтвердить', `admin:confirm:${booking.id}`)
-          .text('❌ Отклонить', `admin:reject:${booking.id}`)
-          .row();
-      }
-      keyboard
-        .url('📅 Открыть этот день в Google Calendar', calendarUrl)
-        .row()
-        .text('🚫 Заблокировать', `admin:block:${booking.userId}`)
-        .text('🔓 Разблокировать', `admin:unblock:${booking.userId}`)
-        .row()
-        .text('← К списку', 'admin:bookings');
-      await ctx.reply(
-        [
-          formatAdminBooking(booking, slotAvailable),
-          '',
-          'Если кнопка не откроется, нажмите или скопируйте ссылку в браузер:',
-          calendarUrl,
-        ].join('\n'),
-        {
-          reply_markup: keyboard,
-        },
-      );
+      await this.showAdminBooking(ctx, ctx.match[1]);
     });
 
     bot.callbackQuery(/^admin:(confirm|reject):([a-z0-9]+)$/u, async (ctx) => {
@@ -855,6 +823,58 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
         .row()
         .text('🏠 Главное меню', 'menu:main'),
     });
+  }
+
+  private async showAdminBooking(ctx: Context, bookingId: string): Promise<void> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { user: true, calendarEvent: true },
+    });
+    if (!booking) {
+      await ctx.reply('Заявка не найдена.');
+      return;
+    }
+    const { date, time } = localDateTime(booking.startAt, booking.timezone);
+    const calendarAccountEmail = await this.googleCalendar.getAccountEmail();
+    const calendarUrl = googleCalendarDayUrl(date, calendarAccountEmail);
+    const slotAvailable =
+      booking.status === BookingStatus.PENDING_APPROVAL
+        ? await this.availability.isSlotAvailable(
+            date,
+            time,
+            booking.durationMinutes,
+            new Date(),
+            booking.id,
+          )
+        : null;
+    const keyboard = new InlineKeyboard();
+    if (booking.status === BookingStatus.PENDING_APPROVAL) {
+      keyboard
+        .text('✅ Подтвердить', `admin:confirm:${booking.id}`)
+        .text('❌ Отклонить', `admin:reject:${booking.id}`)
+        .row();
+    }
+    if (this.miniAppUrl) {
+      const miniAppBookingUrl = new URL(this.miniAppUrl);
+      miniAppBookingUrl.searchParams.set('tgWebAppStartParam', `calendar_${booking.id}`);
+      keyboard.webApp('📱 Открыть заявку в приложении', miniAppBookingUrl.toString()).row();
+    }
+    keyboard
+      .url('📅 Открыть этот день в Google Calendar', calendarUrl)
+      .row()
+      .text('🚫 Заблокировать', `admin:block:${booking.userId}`)
+      .text('🔓 Разблокировать', `admin:unblock:${booking.userId}`)
+      .row()
+      .text('← К списку', 'admin:bookings');
+    await ctx.reply(
+      [
+        formatAdminBooking(booking, slotAvailable),
+        '',
+        'Если кнопка календаря не откроется, нажмите или скопируйте ссылку:',
+        calendarUrl,
+      ].join('\n'),
+      { reply_markup: keyboard },
+    );
   }
 
   private async showNotificationMenu(ctx: Context, user: User): Promise<void> {

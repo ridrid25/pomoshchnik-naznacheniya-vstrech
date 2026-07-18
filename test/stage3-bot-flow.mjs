@@ -65,7 +65,7 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
           language_code: 'ru',
         },
         text,
-        ...(text === '/start'
+        ...(text.startsWith('/start')
           ? { entities: [{ offset: 0, length: 6, type: 'bot_command' }] }
           : {}),
       },
@@ -175,6 +175,19 @@ test('Stage 3 Telegram bot-flow smoke', { timeout: 30_000 }, async () => {
     await sendCallback(9002, 'admin:menu', 'stage3_admin');
     await sendCallback(9002, 'admin:bookings', 'stage3_admin');
     const identifiers = readIdentifiers(databasePath, 9001);
+    await sendMessageUpdate(
+      9002,
+      `/start calendar_${identifiers.bookingId}`,
+      'stage3_admin',
+    );
+    assert.equal(
+      lastCallbackData(telegramRequests, 'admin:confirm:'),
+      `admin:confirm:${identifiers.bookingId}`,
+    );
+    assert.match(
+      lastWebAppUrl(telegramRequests, '📱 Открыть заявку в приложении'),
+      new RegExp(`tgWebAppStartParam=calendar_${identifiers.bookingId}$`, 'u'),
+    );
     await sendCallback(
       9002,
       `admin:booking:${identifiers.bookingId}`,
