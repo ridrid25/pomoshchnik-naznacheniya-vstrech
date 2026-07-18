@@ -111,7 +111,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       { command: 'book', description: 'Записаться на встречу' },
       { command: 'bookings', description: 'Мои заявки' },
       { command: 'notifications', description: 'Канал уведомлений' },
-      { command: 'admin', description: 'Меню администратора' },
+      { command: 'admin', description: 'Управление встречами' },
     ]);
     await this.configureMiniAppMenu();
 
@@ -447,7 +447,7 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
         original_booking_id: original.id,
       });
       await ctx.reply(
-        '🔄 Перенос встречи\n\nСтарая встреча останется в календаре, пока администратор не подтвердит новое время. Выберите новую неделю.',
+        '🔄 Перенос встречи\n\nСтарая встреча останется в календаре, пока новое время не будет подтверждено. Выберите новую неделю.',
       );
       await this.renderDraftStep(ctx, user);
     });
@@ -1153,7 +1153,7 @@ function mainMenuKeyboard(
     .row()
     .text('📋 Мои заявки', 'bookings:list')
     .text('🔔 Уведомления', 'notification:menu');
-  if (isAdmin) keyboard.row().text('⚙️ Администрирование', 'admin:menu');
+  if (isAdmin) keyboard.row().text('⚙️ Управление встречами', 'admin:menu');
   return keyboard;
 }
 

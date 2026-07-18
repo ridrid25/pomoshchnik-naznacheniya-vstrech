@@ -175,7 +175,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     );
     if (unsent.length > 5) lines.push(`• Ещё ${unsent.length - 5}`);
     const delivered = await this.notifications.notifyAdmin(
-      `⏳ ${unsent.length} заявок ждут решения.\n${lines.join('\n')}\nОткройте Mini App → Согласование.`,
+      `⏳ ${unsent.length} заявок ждут решения.\n${lines.join('\n')}\nОткройте Mini App → Управление.`,
     );
     if (!delivered) return 0;
     for (const { booking, waitingMinutes } of unsent) {

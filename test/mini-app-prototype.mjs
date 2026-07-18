@@ -119,6 +119,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(css, /integration-status-card/u);
   assert.match(html, /Управление встречами/u);
   assert.match(html, /Настройки расписания/u);
+  assert.doesNotMatch(`${html}\n${javascript}`, /следующ(?:ем этапе|ими блоками)/iu);
   assert.match(html, /<span>Назад<\/span>/u);
   assert.doesNotMatch(css, /\.telegram-mode \.back-button \{ display: none/u);
   assert.doesNotMatch(`${html}\n${javascript}`, /администратор/iu);

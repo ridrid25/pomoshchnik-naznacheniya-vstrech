@@ -1464,7 +1464,7 @@
       if (booking) retryUnavailableBooking(booking);
       return;
     }
-    if (button.dataset.action) showToast('Действие появится на следующем этапе');
+    if (button.dataset.action) showToast('Это действие сейчас недоступно');
   });
 
   elements.theme.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
