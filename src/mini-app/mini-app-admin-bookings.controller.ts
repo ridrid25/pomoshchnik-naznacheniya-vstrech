@@ -19,6 +19,7 @@ import {
   type BookingDecisionAction,
   type BookingDecisionResult,
 } from '../bookings/booking-decision.service';
+import { BookingService } from '../bookings/booking.service';
 import { PrismaService } from '../database/prisma.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import {
@@ -56,6 +57,7 @@ export class MiniAppAdminBookingsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly decisions: BookingDecisionService,
+    private readonly bookings: BookingService,
     private readonly googleCalendar: GoogleCalendarService,
     private readonly availability: AvailabilityService,
   ) {}
@@ -171,6 +173,16 @@ export class MiniAppAdminBookingsController {
     return {
       booking: await this.toContract(booking, googleCalendarDayUrl),
     };
+  }
+
+  @Post(':id/calendar-return')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(MiniAppOriginGuard)
+  async prepareCalendarReturn(
+    @Param('id') id: string,
+  ): Promise<{ returnUrl: string }> {
+    await this.findBooking(id);
+    return { returnUrl: await this.bookings.ensureCalendarReturnLink(id) };
   }
 
   @Post(':id/:action')

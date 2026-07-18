@@ -17,6 +17,7 @@ import {
 } from '../generated/prisma/client';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import { JsonLoggerService } from '../logging/json-logger.service';
+import { createCalendarReturnUrl } from '../mini-app/mini-app-links';
 import { AdminReviewTokenService } from './admin-review-token.service';
 
 const BOOKING_TTL_MS = 48 * 60 * 60 * 1000;
@@ -578,15 +579,7 @@ export class BookingService {
       const input = {
         bookingId: booking.id,
         title: booking.title,
-        description: [
-          '⏳ Статус: заявка ожидает вашего решения.',
-          'Эта бледная запись не помечает вас занятой в Google Calendar.',
-          reviewUrl ? '' : null,
-          reviewUrl ? '🔐 Рассмотреть, подтвердить или отклонить:' : null,
-          reviewUrl,
-          '',
-          this.calendarDescription(booking),
-        ].filter((line): line is string => line !== null).join('\n'),
+        description: this.pendingCalendarDescription(booking, reviewUrl),
         startAt: booking.startAt,
         endAt: new Date(
           booking.startAt.getTime() + booking.durationMinutes * 60_000,
@@ -629,7 +622,53 @@ export class BookingService {
     }
   }
 
+  async ensureCalendarReturnLink(bookingId: string): Promise<string> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { user: true, calendarEvent: true },
+    });
+    if (!booking?.calendarEvent) {
+      throw new Error('Google Calendar event is missing');
+    }
+    const returnUrl = createCalendarReturnUrl(booking.id);
+    const pending =
+      booking.status === BookingStatus.PENDING_APPROVAL ||
+      booking.status === BookingStatus.CONFIRMATION_ERROR;
+    const reviewUrl = pending
+      ? this.reviewTokens.createReviewUrl(booking.id, booking.expiresAt)
+      : null;
+    const description = pending
+      ? this.pendingCalendarDescription(booking, reviewUrl)
+      : this.calendarDescription(booking);
+    await this.googleCalendar.updateEventDescription(
+      booking.calendarEvent.googleEventId,
+      description,
+    );
+    this.log('booking.calendar_return_link.updated', booking.id, {
+      google_event_id: booking.calendarEvent.googleEventId,
+    });
+    return returnUrl;
+  }
+
+  private pendingCalendarDescription(
+    booking: { id: string; comment: string | null; user: User },
+    reviewUrl: string | null,
+  ): string {
+    return [
+      '⏳ Статус: заявка ожидает вашего решения.',
+      'Эта бледная запись не помечает вас занятой в Google Calendar.',
+      reviewUrl ? '' : null,
+      reviewUrl ? '🔐 Рассмотреть, подтвердить или отклонить:' : null,
+      reviewUrl,
+      '',
+      this.calendarDescription(booking),
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
+  }
+
   private calendarDescription(booking: {
+    id: string;
     comment: string | null;
     user: User;
   }): string {
@@ -639,6 +678,9 @@ export class BookingService {
       booking.user.telegramUsername
         ? `Username: @${booking.user.telegramUsername}`
         : 'Username: отсутствует',
+      '',
+      '← Вернуться в Mini App:',
+      createCalendarReturnUrl(booking.id),
     ]
       .filter(Boolean)
       .join('\n');

@@ -8,6 +8,9 @@
     || new URLSearchParams(location.hash.startsWith('#') ? location.hash.slice(1) : location.hash).get('tgWebAppData')
     || '';
   const tg = telegramWebApp?.initData ? telegramWebApp : null;
+  const startParam = tg?.initDataUnsafe?.start_param
+    || new URLSearchParams(location.search).get('tgWebAppStartParam')
+    || '';
 
   const elements = {
     boot: $('bootPanel'), bootTitle: $('bootTitle'), bootText: $('bootText'), telegram: $('telegramButton'),
@@ -140,6 +143,7 @@
       body.classList.toggle('admin-mode', session.user.role === 'ADMIN');
       elements.boot.classList.add('is-ready');
       if (session.user.role === 'ADMIN') void loadAdminQueue();
+      await openStartDestination();
       requestAnimationFrame(updateScrollControls);
     } catch (error) {
       elements.boot.classList.add('is-error');
@@ -148,6 +152,17 @@
         ? 'Адрес приложения не совпадает с настройками сервера.'
         : 'Для записи откройте Mini App через Telegram-бота. Здесь используются только настоящие заявки.';
       elements.telegram.classList.remove('is-hidden');
+    }
+  }
+
+  async function openStartDestination() {
+    const calendarMatch = /^calendar_([a-z0-9]+)$/u.exec(startParam);
+    if (calendarMatch && state.user?.role === 'ADMIN') {
+      await openAdminBooking(calendarMatch[1]);
+      return;
+    }
+    if (startParam === 'calendar') {
+      showScreen(state.user?.role === 'ADMIN' ? 'admin' : 'bookings');
     }
   }
 
@@ -549,7 +564,7 @@
     elements.detailCard.innerHTML = `
       <div class="detail-status-row"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div><span>${booking.durationMinutes} мин</span></div>
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
-      ${canAdminDecide ? renderCalendarReviewCard(calendarUrl) : ''}
+      ${canAdminDecide ? renderCalendarReviewCard(calendarUrl, booking.id) : ''}
       <dl class="detail-list">
         <div><dt>Email</dt><dd>${escapeHtml(booking.email || 'Только Telegram')}</dd></div>
         ${booking.rejectionReason ? `<div><dt>Причина</dt><dd>${escapeHtml(booking.rejectionReason)}</dd></div>` : ''}
@@ -1100,16 +1115,16 @@
     const result = collecting
       ? `Нужно ещё ${remaining} ${plural(remaining, 'заявка', 'заявки', 'заявок')} для честного сравнения.`
       : metric.comparison === 'IMPROVED'
-        ? 'Доля конфликтов стала ниже базовых 22%.'
+        ? 'Доля конфликтов стала ниже прежних 22%.'
         : metric.comparison === 'WORSE'
-          ? 'Доля конфликтов выше базовых 22% — нужна дополнительная проверка.'
-          : 'Доля конфликтов осталась на уровне базовых 22%.';
+          ? 'Доля конфликтов выше прежних 22% — нужна дополнительная проверка.'
+          : 'Доля конфликтов осталась на прежнем уровне — 22%.';
     const currentRate = metric.ratePercent === null ? 'Нет новых данных' : `${metric.ratePercent}% конфликтов`;
     elements.adminReliability.className = `reliability-card ${collecting ? 'collecting' : metric.comparison.toLowerCase()}`;
     elements.adminReliability.innerHTML = `
-      <div class="reliability-head"><div><p class="eyebrow">Контрольный пилот M9</p><h2>${collecting ? `${sampleSize} из ${minimum} заявок` : currentRate}</h2></div><span>${collecting ? 'Собираем' : escapeHtml(currentRate)}</span></div>
-      <div class="pilot-progress" aria-label="Собрано ${sampleSize} из ${minimum} заявок"><span style="width:${progress}%"></span></div>
-      <p>${escapeHtml(result)} Базовый пилот: 2 из 9, или 22%.</p>`;
+      <div class="reliability-head"><div><p class="eyebrow">Статистика заявок</p><h2>${collecting ? `${sampleSize} из ${minimum} заявок` : currentRate}</h2></div><span>${collecting ? 'Считаем' : escapeHtml(currentRate)}</span></div>
+      <div class="reliability-progress" aria-label="Учтено ${sampleSize} из ${minimum} заявок"><span style="width:${progress}%"></span></div>
+      <p>${escapeHtml(result)} Ранее занятое время выбрали в 2 из 9 заявок — это 22%.</p>`;
   }
 
   function renderAdminCard(booking) {
@@ -1159,7 +1174,7 @@
       ${renderQueueAge(booking)}
       <div class="detail-time-block"><strong>${escapeHtml(formatBookingMoment(booking))}</strong><span>${escapeHtml(timezoneLabel(booking.timezone))} · ${format}</span></div>
       ${renderAdminSlotState(booking)}
-      ${renderCalendarReviewCard(booking.googleCalendarDayUrl)}
+      ${renderCalendarReviewCard(booking.googleCalendarDayUrl, booking.id)}
       <dl class="detail-list">
         <div><dt>Пользователь</dt><dd>${escapeHtml(booking.user.displayName)}</dd></div>
         <div><dt>Telegram</dt><dd>${escapeHtml(booking.user.username ? `@${booking.user.username}` : booking.user.telegramId)}</dd></div>
@@ -1186,7 +1201,7 @@
     return `<div class="queue-age${booking.isAging ? ' aging' : ''}">Ждёт решения ${escapeHtml(formatWaitingTime(booking.waitingMinutes))}</div>`;
   }
 
-  function renderCalendarReviewCard(calendarUrl) {
+  function renderCalendarReviewCard(calendarUrl, bookingId) {
     if (!calendarUrl) return '';
     return `<section class="calendar-review-card">
         <div class="calendar-review-head">
@@ -1194,8 +1209,8 @@
           <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
         </div>
         <p>В нужном времени найдите бледную плашку «На согласовании» с темой этой встречи.</p>
-        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
-        <span class="calendar-review-note">После проверки вернитесь в «Запись на встречу» — заявка и кнопки решения останутся открытыми.</span>
+        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}" data-calendar-booking-id="${escapeHtml(bookingId)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
+        <span class="calendar-review-note">В календаре нажмите встречу, затем ссылку «← Вернуться в Mini App». Она откроет эту заявку.</span>
       </section>`;
   }
 
@@ -1263,18 +1278,18 @@
       .format(new Date(startAt)).replace('.', '').toUpperCase();
   }
 
-  function openCalendarDay(value) {
+  async function openCalendarDay(value, bookingId) {
     try {
       const url = new URL(value);
       if (url.origin !== 'https://calendar.google.com' || !url.pathname.startsWith('/calendar/')) {
         throw new Error('Некорректная ссылка календаря');
       }
+      if (!/^[a-z0-9]+$/u.test(bookingId || '')) throw new Error('Заявка не найдена');
+      await api(`/admin/bookings/${bookingId}/calendar-return`, { method: 'POST' });
       tg?.HapticFeedback?.selectionChanged();
       showModal(
-        'Как вернуться к заявке',
-        tg
-          ? 'После проверки закройте Google Calendar или вернитесь в Telegram. Эта заявка и кнопки решения останутся открытыми.'
-          : 'Календарь открылся в соседней вкладке. После проверки выберите вкладку «Запись на встречу» — эта заявка и кнопки решения останутся открытыми.',
+        'Возврат уже добавлен',
+        'В Google Calendar нажмите эту встречу, затем ссылку «← Вернуться в Mini App». Она вернёт вас прямо к заявке.',
         '↩',
       );
       if (tg?.openLink) {
@@ -1407,7 +1422,7 @@
       removeWorkingPeriod(weekday, index);
       return;
     }
-    if (button.dataset.calendarUrl) { openCalendarDay(button.dataset.calendarUrl); return; }
+    if (button.dataset.calendarUrl) { void openCalendarDay(button.dataset.calendarUrl, button.dataset.calendarBookingId); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
         ? state.selectedAdminBooking

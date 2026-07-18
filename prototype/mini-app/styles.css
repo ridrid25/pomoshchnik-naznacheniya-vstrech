@@ -1114,8 +1114,8 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(i
 .reliability-head > span { padding: 6px 9px; border-radius: 999px; background: var(--teal-soft); color: var(--teal); font-size: 9px; font-weight: 750; }
 .reliability-card.collecting .reliability-head > span { background: var(--warm-soft); color: #bd681c; }
 .reliability-card.worse .reliability-head > span { background: var(--danger-soft); color: var(--danger); }
-.pilot-progress { height: 7px; margin: 13px 0 10px; overflow: hidden; border-radius: 999px; background: var(--surface-soft); }
-.pilot-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--teal)); transition: width .25s ease; }
+.reliability-progress { height: 7px; margin: 13px 0 10px; overflow: hidden; border-radius: 999px; background: var(--surface-soft); }
+.reliability-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--teal)); transition: width .25s ease; }
 .reliability-card > p { color: var(--text-soft); font-size: 10px; line-height: 1.45; }
 .admin-settings-entry { display: grid; width: 100%; margin: -2px 0 14px; padding: 13px 14px; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line)); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--surface), color-mix(in srgb, var(--primary-soft) 60%, var(--surface-solid))); box-shadow: var(--shadow-soft); text-align: left; }
 .admin-settings-entry > span:nth-child(2) { display: grid; gap: 3px; }

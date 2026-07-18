@@ -152,6 +152,17 @@ async function main(): Promise<void> {
     assert.equal(pendingBody.attendees, undefined);
     assert.equal(pendingBody.conferenceData, undefined);
 
+    await service.updateEventDescription(
+      pending.googleEventId,
+      '← Вернуться в Mini App:\nhttps://t.me/example_bot?startapp=calendar_booking',
+    );
+    const descriptionPatch = calls.find((call) => {
+      const requestBody = call.params.requestBody as { description?: string; status?: string } | undefined;
+      return call.method === 'events.patch' && requestBody?.description?.includes('Вернуться в Mini App') && !requestBody.status;
+    });
+    assert.equal(descriptionPatch?.params.eventId, pending.googleEventId);
+    assert.equal(descriptionPatch?.params.sendUpdates, 'none');
+
     const confirmedPending = await service.confirmPendingEvent(
       pending.googleEventId,
       {

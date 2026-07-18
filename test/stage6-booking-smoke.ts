@@ -44,6 +44,7 @@ async function main(): Promise<void> {
     const conferenceChoices: boolean[] = [];
     const confirmedPendingEvents: string[] = [];
     const pendingDescriptions: string[] = [];
+    const updatedDescriptions: string[] = [];
     const googleCalendar = {
       isConfigured: () => true,
       createPendingEvent: async (input: { description: string }) => {
@@ -58,6 +59,12 @@ async function main(): Promise<void> {
         input: { description: string },
       ) => {
         pendingDescriptions.push(input.description);
+      },
+      updateEventDescription: async (
+        _googleEventId: string,
+        description: string,
+      ) => {
+        updatedDescriptions.push(description);
       },
       confirmPendingEvent: async (
         googleEventId: string,
@@ -168,7 +175,9 @@ async function main(): Promise<void> {
     assert.equal(reviewPage.status, 200);
     assert.match(reviewPage.body, /Подтвердить/u);
     assert.match(reviewPage.body, /Отклонить/u);
-    assert.match(reviewPage.body, /Вернуться в Google Calendar/u);
+    assert.match(reviewPage.body, /← Вернуться в Mini App/u);
+    assert.match(reviewPage.body, /Открыть Google Calendar/u);
+    assert.match(reviewPage.body, /startapp=calendar_stage6booking/u);
     assert.match(reviewPage.body, /scrollControls/u);
     assert.deepEqual(webDecisions, []);
     const invalidPage = responseRecorder();
@@ -181,7 +190,8 @@ async function main(): Promise<void> {
       decisionPage.response,
     );
     assert.equal(decisionPage.status, 200);
-    assert.match(decisionPage.body, /Вернуться в Google Calendar/u);
+    assert.match(decisionPage.body, /← Вернуться в Mini App/u);
+    assert.match(decisionPage.body, /Открыть Google Calendar/u);
     assert.doesNotMatch(decisionPage.body, /Можно закрыть эту вкладку/u);
     assert.deepEqual(webDecisions, ['confirm']);
 
@@ -216,6 +226,15 @@ async function main(): Promise<void> {
         'https://meeting.example.com/admin/review/',
       ),
     );
+    assert.match(
+      pendingDescriptions[0],
+      /https:\/\/t\.me\/Zapiscalender_bot\?startapp=calendar_/u,
+    );
+    assert.match(
+      await service.ensureCalendarReturnLink(first.id),
+      /^https:\/\/t\.me\/Zapiscalender_bot\?startapp=calendar_/u,
+    );
+    assert.match(updatedDescriptions[0], /← Вернуться в Mini App/u);
     const decisionNotifications: string[] = [];
     const decisionService = new BookingDecisionService(
       prisma as never,

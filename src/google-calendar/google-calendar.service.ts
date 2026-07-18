@@ -294,6 +294,27 @@ export class GoogleCalendarService {
     }
   }
 
+  async updateEventDescription(
+    googleEventId: string,
+    description: string,
+  ): Promise<void> {
+    try {
+      const calendar = await this.authorizedCalendar();
+      await calendar.events.patch({
+        calendarId: this.calendarId,
+        eventId: googleEventId,
+        sendUpdates: 'none',
+        requestBody: { description },
+      });
+      this.logger.logEvent('GoogleCalendarService', 'google.event.description_updated', {
+        google_event_id: googleEventId,
+      });
+    } catch (error: unknown) {
+      await this.reportFailure('google.event.description_update_failed', error);
+      throw error;
+    }
+  }
+
   async confirmPendingEvent(
     googleEventId: string,
     input: CreateGoogleEventInput,
