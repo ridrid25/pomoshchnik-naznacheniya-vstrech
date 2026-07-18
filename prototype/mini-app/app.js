@@ -1295,11 +1295,6 @@
       if (!/^[a-z0-9]+$/u.test(bookingId || '')) throw new Error('Заявка не найдена');
       await api(`/admin/bookings/${bookingId}/calendar-return`, { method: 'POST' });
       tg?.HapticFeedback?.selectionChanged();
-      showModal(
-        'Возврат уже добавлен',
-        'В Google Calendar нажмите эту встречу, затем ссылку «← Вернуться в Mini App». Она вернёт вас прямо к заявке.',
-        '↩',
-      );
       if (tg?.openLink) {
         tg.openLink(url.toString());
         return;
