@@ -95,6 +95,8 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.doesNotMatch(javascript, /Возврат уже добавлен/u);
   assert.match(javascript, /window\.location\.assign\(url\.toString\(\)\)/u);
   assert.match(javascript, /TelegramWebviewProxy/u);
+  assert.match(javascript, /https:\/\/web\.telegram\.org/u);
+  assert.doesNotMatch(javascript, /window\.parent !== window/u);
   assert.match(javascript, /tgWebAppStartParam/u);
   assert.match(javascript, /openStartDestination/u);
   assert.doesNotMatch(`${html}\n${javascript}`, /контрольн(?:ый|ая|ое)|пилот|прототип/iu);

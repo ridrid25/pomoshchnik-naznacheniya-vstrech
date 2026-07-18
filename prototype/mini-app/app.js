@@ -1296,7 +1296,10 @@
       void api(`/admin/bookings/${bookingId}/calendar-return`, { method: 'POST' })
         .catch((error) => showToast(error.message || 'Не удалось обновить ссылку возврата'));
       tg?.HapticFeedback?.selectionChanged();
-      const telegramCanOpenLink = Boolean(window.TelegramWebviewProxy) || window.parent !== window;
+      const telegramWebOrigin = 'https://web.telegram.org';
+      const telegramCanOpenLink = Boolean(window.TelegramWebviewProxy)
+        || document.referrer.startsWith(`${telegramWebOrigin}/`)
+        || Array.from(window.location.ancestorOrigins || []).includes(telegramWebOrigin);
       if (tg?.openLink && telegramCanOpenLink) {
         tg.openLink(url.toString());
         return;
