@@ -661,13 +661,11 @@ export class BookingService {
   private pendingCalendarDescription(
     booking: { id: string; comment: string | null; user: User },
   ): string {
-    const miniAppUrl = createCalendarReturnUrl(booking.id);
     return [
       '⏳ Статус: заявка ожидает вашего решения.',
       'Эта бледная запись не помечает вас занятой в Google Calendar.',
       '',
-      '🔐 Открыть заявку и принять решение в Telegram:',
-      miniAppUrl,
+      '🔐 Чтобы подтвердить или отклонить заявку, нажмите ниже «Просмотреть источник».',
       '',
       booking.comment,
       `Telegram: ${booking.user.telegramDisplayName}`,

@@ -230,12 +230,9 @@ async function main(): Promise<void> {
     assert.ok(!pendingDescriptions[0].includes('/admin/review/'));
     assert.match(
       pendingDescriptions[0],
-      /Открыть заявку и принять решение в Telegram/u,
+      /нажмите ниже «Просмотреть источник»/u,
     );
-    assert.match(
-      pendingDescriptions[0],
-      /https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
-    );
+    assert.doesNotMatch(pendingDescriptions[0], /https:\/\/t\.me\//u);
     assert.match(
       pendingSourceUrls[0],
       /^https:\/\/meeting\.example\.com\/admin\/review\//u,
@@ -244,8 +241,9 @@ async function main(): Promise<void> {
       await service.ensureCalendarReturnLink(first.id),
       /^https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
     );
-    assert.match(updatedDescriptions[0], /Открыть заявку и принять решение в Telegram/u);
+    assert.match(updatedDescriptions[0], /нажмите ниже «Просмотреть источник»/u);
     assert.ok(!updatedDescriptions[0].includes('/admin/review/'));
+    assert.doesNotMatch(updatedDescriptions[0], /https:\/\/t\.me\//u);
     assert.match(
       updatedSourceUrls[0],
       /^https:\/\/meeting\.example\.com\/admin\/review\//u,
