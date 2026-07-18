@@ -1144,10 +1144,14 @@
     if (booking.canConfirm) actionButtons.push(`<button class="primary-button" type="button" data-admin-action="confirm" data-admin-id="${escapeHtml(booking.id)}">Подтвердить</button>`);
     if (booking.canReject) actionButtons.push(`<button class="danger-button" type="button" data-admin-action="reject" data-admin-id="${escapeHtml(booking.id)}">Отклонить</button>`);
     const actions = actionButtons.length ? `<div class="approval-actions${actionButtons.length === 1 ? ' one' : ''}">${actionButtons.join('')}</div>` : '';
+    const calendarReview = actionButtons.length
+      ? renderCalendarReviewCard(booking.googleCalendarDayUrl, booking.id)
+      : '';
     return `<article class="approval-card">
       <div class="approval-meta"><div class="booking-status ${status.className}"><span>${status.icon}</span>${status.label}</div>${renderQueueAge(booking)}</div>
       <div class="approval-head"><div><span class="request-code">${booking.type === 'RESCHEDULE' ? 'Перенос встречи' : 'Новая встреча'}</span><h3>${escapeHtml(booking.title)}</h3><p>${escapeHtml(booking.user.displayName)}${account}</p></div><span class="format-chip ${booking.meetingFormat === 'ONLINE' ? 'online' : 'personal'}">${format}</span></div>
       <div class="approval-time"><span class="date-tile compact"><span>${escapeHtml(adminMonth(booking.startAt))}</span><strong>${new Date(booking.startAt).toLocaleString('ru-RU', { timeZone: booking.timezone, day: 'numeric' })}</strong></span><div><strong>${escapeHtml(formatBookingMoment(booking))}</strong><p>${escapeHtml(timezoneLabel(booking.timezone))} · ${booking.durationMinutes} минут</p></div></div>
+      ${calendarReview}
       ${renderAdminSlotState(booking)}
       ${warning}${actions}
       <button class="outline-button full-width" type="button" data-admin-booking-id="${escapeHtml(booking.id)}">Открыть заявку</button>
@@ -1210,10 +1214,10 @@
     return `<section class="calendar-review-card">
         <div class="calendar-review-head">
           <span class="calendar-review-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span>
-          <div><small>GOOGLE CALENDAR</small><strong>Сверьте занятость</strong></div>
+          <div><small>GOOGLE CALENDAR</small><strong>Сначала сверьте календарь</strong></div>
         </div>
-        <p>В нужном времени найдите бледную плашку «На согласовании» с темой этой встречи.</p>
-        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}" data-calendar-booking-id="${escapeHtml(bookingId)}"><span>Открыть этот день</span><span aria-hidden="true">↗</span></button>
+        <p>Убедитесь, что предложенное время вам подходит. В календаре найдите бледную плашку «На согласовании» с темой этой встречи.</p>
+        <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}" data-calendar-booking-id="${escapeHtml(bookingId)}"><span>Открыть Google Calendar</span><span aria-hidden="true">↗</span></button>
         <span class="calendar-review-note">В календаре нажмите встречу, затем ссылку «← Вернуться в Mini App». Она откроет эту заявку.</span>
       </section>`;
   }

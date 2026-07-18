@@ -65,6 +65,11 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /dataset\.calendarUrl/u);
   assert.match(javascript, /tg\?\.openLink/u);
   assert.match(javascript, /renderCalendarReviewCard/u);
+  assert.equal(
+    (javascript.match(/renderCalendarReviewCard\(booking\.googleCalendarDayUrl, booking\.id\)/gu) ?? []).length,
+    2,
+  );
+  assert.match(javascript, /Открыть Google Calendar/u);
   assert.match(javascript, /renderAdminSlotState/u);
   assert.match(javascript, /booking\.slotAvailable === false/u);
   assert.match(javascript, /booking\.canRetry/u);

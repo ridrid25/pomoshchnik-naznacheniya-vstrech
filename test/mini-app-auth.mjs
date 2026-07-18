@@ -358,6 +358,10 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(pendingAdminBooking.slotAvailable, true);
     assert.equal(pendingAdminBooking.canConfirm, true);
     assert.equal(pendingAdminBooking.canReject, true);
+    assert.match(
+      pendingAdminBooking.googleCalendarDayUrl,
+      /^https:\/\/calendar\.google\.com\/calendar\/r\/day\/\d{4}\/\d{1,2}\/\d{1,2}/u,
+    );
     assert.ok(pendingAdminBooking.waitingMinutes >= 19);
     assert.equal(pendingAdminBooking.isAging, true);
     assert.ok(adminQueueBody.summary.pending >= 1);

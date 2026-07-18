@@ -147,7 +147,13 @@ export class MiniAppAdminBookingsController {
       : null;
     const comparison = compareReliability(m9SampleSize, m9SlotUnavailable);
     const bookingContracts = await Promise.all(
-      scopedBookings.map((booking) => this.toContract(booking, null, now)),
+      scopedBookings.map(async (booking) => {
+        const googleCalendarDayUrl = await this.googleCalendar.getCalendarDayUrl(
+          booking.startAt,
+          booking.timezone,
+        );
+        return this.toContract(booking, googleCalendarDayUrl, now);
+      }),
     );
     return {
       bookings: bookingContracts,
