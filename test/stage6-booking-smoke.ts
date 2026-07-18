@@ -107,7 +107,6 @@ async function main(): Promise<void> {
       availability as never,
       googleCalendar as never,
       new JsonLoggerService(),
-      reviewTokens,
     );
 
     const validToken = reviewTokens.createToken(
@@ -221,10 +220,10 @@ async function main(): Promise<void> {
     assert.equal(first.emailSnapshot, null);
     assert.equal(first.calendarEvent?.syncStatus, 'PENDING');
     assert.equal(first.calendarEvent?.googleEventId, 'stage6-pending-1');
-    assert.ok(
-      pendingDescriptions[0].includes(
-        'https://meeting.example.com/admin/review/',
-      ),
+    assert.ok(!pendingDescriptions[0].includes('/admin/review/'));
+    assert.match(
+      pendingDescriptions[0],
+      /Открыть заявку и принять решение в Telegram/u,
     );
     assert.match(
       pendingDescriptions[0],
@@ -234,7 +233,8 @@ async function main(): Promise<void> {
       await service.ensureCalendarReturnLink(first.id),
       /^https:\/\/t\.me\/Zapiscalender_bot\?startapp=calendar_/u,
     );
-    assert.match(updatedDescriptions[0], /← Вернуться в Mini App/u);
+    assert.match(updatedDescriptions[0], /Открыть заявку и принять решение в Telegram/u);
+    assert.ok(!updatedDescriptions[0].includes('/admin/review/'));
     const decisionNotifications: string[] = [];
     const decisionService = new BookingDecisionService(
       prisma as never,

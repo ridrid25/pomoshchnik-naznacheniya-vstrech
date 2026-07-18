@@ -18,7 +18,6 @@ import {
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import { JsonLoggerService } from '../logging/json-logger.service';
 import { createCalendarReturnUrl } from '../mini-app/mini-app-links';
-import { AdminReviewTokenService } from './admin-review-token.service';
 
 const BOOKING_TTL_MS = 48 * 60 * 60 * 1000;
 
@@ -61,7 +60,6 @@ export class BookingService {
     private readonly availability: AvailabilityService,
     private readonly googleCalendar: GoogleCalendarService,
     private readonly logger: JsonLoggerService,
-    private readonly reviewTokens: AdminReviewTokenService,
   ) {}
 
   async create(input: CreateBookingInput) {
@@ -572,14 +570,10 @@ export class BookingService {
 
     let googleEventId: string | null = null;
     try {
-      const reviewUrl = this.reviewTokens.createReviewUrl(
-        booking.id,
-        booking.expiresAt,
-      );
       const input = {
         bookingId: booking.id,
         title: booking.title,
-        description: this.pendingCalendarDescription(booking, reviewUrl),
+        description: this.pendingCalendarDescription(booking),
         startAt: booking.startAt,
         endAt: new Date(
           booking.startAt.getTime() + booking.durationMinutes * 60_000,
@@ -634,11 +628,8 @@ export class BookingService {
     const pending =
       booking.status === BookingStatus.PENDING_APPROVAL ||
       booking.status === BookingStatus.CONFIRMATION_ERROR;
-    const reviewUrl = pending
-      ? this.reviewTokens.createReviewUrl(booking.id, booking.expiresAt)
-      : null;
     const description = pending
-      ? this.pendingCalendarDescription(booking, reviewUrl)
+      ? this.pendingCalendarDescription(booking)
       : this.calendarDescription(booking);
     await this.googleCalendar.updateEventDescription(
       booking.calendarEvent.googleEventId,
@@ -652,16 +643,20 @@ export class BookingService {
 
   private pendingCalendarDescription(
     booking: { id: string; comment: string | null; user: User },
-    reviewUrl: string | null,
   ): string {
+    const miniAppUrl = createCalendarReturnUrl(booking.id);
     return [
       '⏳ Статус: заявка ожидает вашего решения.',
       'Эта бледная запись не помечает вас занятой в Google Calendar.',
-      reviewUrl ? '' : null,
-      reviewUrl ? '🔐 Рассмотреть, подтвердить или отклонить:' : null,
-      reviewUrl,
       '',
-      this.calendarDescription(booking),
+      '🔐 Открыть заявку и принять решение в Telegram:',
+      miniAppUrl,
+      '',
+      booking.comment,
+      `Telegram: ${booking.user.telegramDisplayName}`,
+      booking.user.telegramUsername
+        ? `Username: @${booking.user.telegramUsername}`
+        : 'Username: отсутствует',
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
