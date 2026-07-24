@@ -137,8 +137,12 @@ export class MiniAppAdminSettingsController {
         this.prisma.messageTemplate.count(),
       ]);
     if (!schedule) throw new Error('Schedule settings are not initialized');
+    const googleReachable =
+      googleStatus.configured && googleStatus.authorized
+        ? await this.googleCalendar.probeConnection().catch(() => false)
+        : false;
     return {
-      google: { ...googleStatus, accountEmail },
+      google: { ...googleStatus, reachable: googleReachable, accountEmail },
       schedule: {
         timezone: schedule.timezone,
         minimumLeadTimeMinutes: schedule.minimumLeadTimeMinutes,

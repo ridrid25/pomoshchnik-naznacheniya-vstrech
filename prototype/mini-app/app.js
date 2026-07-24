@@ -866,12 +866,14 @@
     const settings = state.adminSettings;
     if (!settings) return;
     const google = settings.google;
-    const connected = google.configured && google.authorized;
+    const connected = google.configured && google.authorized && google.reachable;
+    const needsReconnect = google.configured && !connected;
     elements.googleIntegrationCard.className = `integration-status-card ${connected ? 'is-connected' : 'needs-attention'}`;
     elements.googleIntegrationCard.innerHTML = `
-      <div class="integration-status-head"><span class="integration-logo"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span><div><p class="eyebrow">Google Calendar</p><h2>${connected ? 'Календарь подключён' : 'Нужно подключение'}</h2></div><span class="integration-dot" aria-hidden="true"></span></div>
-      <p>${connected ? 'Свободные окна, заявки и подтверждённые встречи синхронизируются автоматически.' : 'Проверьте подключение Google Calendar в Telegram-боте.'}</p>
-      <div class="integration-account"><span>Аккаунт</span><strong>${escapeHtml(google.accountEmail || 'Не определён')}</strong></div>`;
+      <div class="integration-status-head"><span class="integration-logo"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path><path d="m9 15 2 2 4-4"></path></svg></span><div><p class="eyebrow">Google Calendar</p><h2>${connected ? 'Календарь подключён' : google.authorized ? 'Нужно переподключение' : 'Нужно подключение'}</h2></div><span class="integration-dot" aria-hidden="true"></span></div>
+      <p>${connected ? 'Свободные окна, заявки и подтверждённые встречи синхронизируются автоматически.' : 'Доступ Google перестал действовать. Заявки сохранены — восстановите только связь с календарём.'}</p>
+      <div class="integration-account"><span>Аккаунт</span><strong>${escapeHtml(google.accountEmail || 'Не определён')}</strong></div>
+      ${needsReconnect ? '<a class="integration-reconnect-button" href="/google/oauth/start" target="_blank" rel="noopener">↻ Переподключить Google Calendar</a>' : ''}`;
     const schedule = settings.schedule;
     elements.scheduleTimezone.value = schedule.timezone;
     state.workingPeriodsDraft = schedule.workingPeriods.map((period) => ({ ...period }));

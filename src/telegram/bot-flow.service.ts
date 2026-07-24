@@ -655,12 +655,18 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       const admin = await this.ensureAdmin(ctx);
       if (!admin) return;
       const googleStatus = await this.googleCalendar.getStatus();
+      const googleReachable =
+        googleStatus.configured && googleStatus.authorized
+          ? await this.googleCalendar.probeConnection().catch(() => false)
+          : false;
       const keyboard = new InlineKeyboard();
-      if (googleStatus.configured && !googleStatus.authorized) {
+      if (googleStatus.configured && !googleReachable) {
         const accountEmail = await this.googleCalendar.getAccountEmail();
         keyboard
           .url(
-            '🔗 Подключить Google Calendar',
+            googleStatus.authorized
+              ? '↻ Переподключить Google Calendar'
+              : '🔗 Подключить Google Calendar',
             this.googleCalendar.createAuthorizationUrl(accountEmail),
           )
           .row();
@@ -671,7 +677,13 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
           '🛠 Настройки интеграций',
           '',
           `Google OAuth: ${googleStatus.configured ? 'настроен' : 'нужны Client ID, Secret и Redirect URI'}`,
-          `Google Calendar: ${googleStatus.authorized ? '✅ подключён' : '❌ не подключён'}`,
+          `Google Calendar: ${
+            googleReachable
+              ? '✅ подключён и работает'
+              : googleStatus.authorized
+                ? '⚠️ нужно переподключить'
+                : '❌ не подключён'
+          }`,
         ].join('\n'),
         { reply_markup: keyboard },
       );

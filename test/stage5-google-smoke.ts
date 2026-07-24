@@ -16,9 +16,22 @@ async function main(): Promise<void> {
   const prisma = createPrismaClient(databaseUrl);
   await prisma.$connect();
   const originalCalendar = google.calendar;
+  const originalOauth2 = google.oauth2;
+  const originalFetch = globalThis.fetch;
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+  const telegramAlerts: Array<Record<string, unknown>> = [];
   let insertedEventSequence = 0;
+  let freeBusyError: Error | null = null;
   try {
+    globalThis.fetch = (async (_input, init) => {
+      telegramAlerts.push(
+        JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
+      );
+      return new Response('{"ok":true}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
     await prisma.googleOAuthToken.create({
       data: {
         id: 1,
@@ -31,9 +44,16 @@ async function main(): Promise<void> {
       },
     });
     const fakeCalendar = {
+      calendars: {
+        get: async (params: Record<string, unknown>) => {
+          calls.push({ method: 'calendars.get', params });
+          return { data: { id: 'primary' } };
+        },
+      },
       freebusy: {
         query: async (params: Record<string, unknown>) => {
           calls.push({ method: 'freebusy.query', params });
+          if (freeBusyError) throw freeBusyError;
           return {
             data: {
               calendars: {
@@ -90,7 +110,10 @@ async function main(): Promise<void> {
         redirectUri: 'http://localhost:3000/google/oauth/callback',
         calendarId: 'primary',
       },
-      app: { telegramBotToken: null, adminTelegramId: null },
+      app: {
+        telegramBotToken: 'stage5-bot-token',
+        adminTelegramId: '900000001',
+      },
     });
     const service = new GoogleCalendarService(
       prisma as unknown as PrismaService,
@@ -116,7 +139,85 @@ async function main(): Promise<void> {
       authorizationUrl.searchParams.get('login_hint'),
       'owner@example.com',
     );
+    assert.match(
+      authorizationUrl.searchParams.get('scope') ?? '',
+      /userinfo\.email/u,
+    );
     assert.ok(authorizationUrl.searchParams.get('state'));
+
+    const originalCreateOAuthClient = (
+      service as unknown as {
+        createOAuthClient: () => unknown;
+      }
+    ).createOAuthClient;
+    const fakeOauth = {
+      getToken: async () => ({
+        tokens: {
+          access_token: 'new-access-token',
+          refresh_token: 'new-refresh-token',
+          scope:
+            'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email',
+          token_type: 'Bearer',
+          expiry_date: new Date('2031-01-01T00:00:00.000Z').getTime(),
+        },
+      }),
+      setCredentials: () => undefined,
+    };
+    (
+      service as unknown as {
+        createOAuthClient: () => unknown;
+      }
+    ).createOAuthClient = () => fakeOauth;
+    (google as unknown as { oauth2: () => unknown }).oauth2 = () => ({
+      userinfo: {
+        get: async () => ({ data: { email: 'NEW-OWNER@example.com' } }),
+      },
+    });
+    await service.handleOAuthCallback(
+      'stage5-valid-code',
+      authorizationUrl.searchParams.get('state')!,
+    );
+    assert.equal(await service.getAccountEmail(), 'new-owner@example.com');
+    const refreshedToken = await prisma.googleOAuthToken.findUnique({
+      where: { id: 1 },
+    });
+    assert.equal(refreshedToken?.refreshToken, 'new-refresh-token');
+
+    (
+      service as unknown as {
+        createOAuthClient: () => unknown;
+      }
+    ).createOAuthClient = originalCreateOAuthClient;
+    const missingRefreshUrl = new URL(service.createAuthorizationUrl());
+    (
+      service as unknown as {
+        createOAuthClient: () => unknown;
+      }
+    ).createOAuthClient = () => ({
+      getToken: async () => ({
+        tokens: {
+          access_token: 'access-without-refresh',
+          expiry_date: new Date('2031-02-01T00:00:00.000Z').getTime(),
+        },
+      }),
+      setCredentials: () => undefined,
+    });
+    await assert.rejects(
+      service.handleOAuthCallback(
+        'stage5-code-without-refresh',
+        missingRefreshUrl.searchParams.get('state')!,
+      ),
+      /new refresh token/u,
+    );
+    const tokenAfterRejectedCallback =
+      await prisma.googleOAuthToken.findUnique({ where: { id: 1 } });
+    assert.equal(tokenAfterRejectedCallback?.refreshToken, 'new-refresh-token');
+    assert.equal(tokenAfterRejectedCallback?.accountEmail, 'new-owner@example.com');
+    (
+      service as unknown as {
+        createOAuthClient: () => unknown;
+      }
+    ).createOAuthClient = originalCreateOAuthClient;
 
     const busy = await service.getBusyIntervals(
       new Date('2030-01-15T00:00:00.000Z'),
@@ -322,6 +423,39 @@ async function main(): Promise<void> {
     assert.equal(cancellation?.params.eventId, 'google-stage5-event-2');
     assert.deepEqual(cancellation?.params.requestBody, { status: 'cancelled' });
 
+    freeBusyError = new Error('invalid_grant');
+    await assert.rejects(
+      service.getBusyIntervals(
+        new Date('2030-01-16T00:00:00.000Z'),
+        new Date('2030-01-17T00:00:00.000Z'),
+        'Europe/Moscow',
+      ),
+      /invalid_grant/u,
+    );
+    assert.deepEqual(await service.getStatus(), {
+      configured: true,
+      authorized: false,
+      tokenExpiresAt: null,
+    });
+    assert.equal(
+      await service.getAccountEmail(),
+      'new-owner@example.com',
+      'An expired authorization must not erase the selected account hint',
+    );
+    await assert.rejects(
+      service.getBusyIntervals(
+        new Date('2030-01-16T00:00:00.000Z'),
+        new Date('2030-01-17T00:00:00.000Z'),
+        'Europe/Moscow',
+      ),
+      /not authorized/u,
+    );
+    assert.equal(
+      telegramAlerts.length,
+      1,
+      'Repeated authorization failures must produce one actionable alert',
+    );
+
     process.stdout.write(
       `${JSON.stringify({
         event: 'stage5.google.verification.completed',
@@ -335,11 +469,18 @@ async function main(): Promise<void> {
         cancellation_checked: true,
         pending_event_lifecycle_checked: true,
         availability_block_sync_checked: true,
+        invalid_grant_disconnect_checked: true,
+        duplicate_alert_suppression_checked: true,
+        oauth_account_identity_checked: true,
+        oauth_refresh_token_required: true,
       })}\n`,
     );
   } finally {
     (google as unknown as { calendar: typeof google.calendar }).calendar =
       originalCalendar;
+    (google as unknown as { oauth2: typeof google.oauth2 }).oauth2 =
+      originalOauth2;
+    globalThis.fetch = originalFetch;
     await prisma.$disconnect();
   }
 }

@@ -8,7 +8,10 @@ import { PrismaService } from '../database/prisma.service';
 import { JsonLoggerService } from '../logging/json-logger.service';
 
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+const GOOGLE_ACCOUNT_EMAIL_SCOPE =
+  'https://www.googleapis.com/auth/userinfo.email';
 const OAUTH_STATE_TTL_MS = 10 * 60_000;
+const FAILURE_ALERT_COOLDOWN_MS = 6 * 60 * 60_000;
 
 export interface BusyInterval {
   start: Date;
@@ -61,6 +64,7 @@ export class GoogleCalendarService {
   private readonly redirectUri: string | null;
   private readonly calendarId: string;
   private readonly oauthStates = new Map<string, number>();
+  private readonly failureAlertAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -101,12 +105,17 @@ export class GoogleCalendarService {
   }
 
   async probeConnection(): Promise<boolean> {
-    const calendar = await this.authorizedCalendar();
-    await calendar.calendars.get(
-      { calendarId: this.calendarId },
-      { timeout: 10_000 },
-    );
-    return true;
+    try {
+      const calendar = await this.authorizedCalendar();
+      await calendar.calendars.get(
+        { calendarId: this.calendarId },
+        { timeout: 10_000 },
+      );
+      return true;
+    } catch (error: unknown) {
+      if (isInvalidGrant(error)) await this.markAuthorizationInvalid();
+      throw error;
+    }
   }
 
   async getCalendarDayUrl(value: Date, timeZone: string): Promise<string> {
@@ -131,7 +140,7 @@ export class GoogleCalendarService {
       prompt: 'select_account consent',
       include_granted_scopes: true,
       login_hint: loginHint?.trim() || undefined,
-      scope: [GOOGLE_CALENDAR_SCOPE],
+      scope: [GOOGLE_CALENDAR_SCOPE, GOOGLE_ACCOUNT_EMAIL_SCOPE],
       state,
     });
   }
@@ -143,11 +152,25 @@ export class GoogleCalendarService {
       throw new Error('Google OAuth state is invalid or expired');
     }
     const oauth = this.createOAuthClient();
-    const existing = await this.prisma.googleOAuthToken.findUnique({
-      where: { id: 1 },
-    });
     const { tokens } = await oauth.getToken(code);
-    await this.persistTokens(tokens, existing?.refreshToken ?? null);
+    if (!tokens.refresh_token) {
+      throw new Error(
+        'Google did not return a new refresh token. Reconnect with consent again.',
+      );
+    }
+    oauth.setCredentials(tokens);
+    const calendar = google.calendar({ version: 'v3', auth: oauth as never });
+    await calendar.calendars.get(
+      { calendarId: this.calendarId },
+      { timeout: 10_000 },
+    );
+    const accountEmail = await this.resolveAuthorizedAccountEmail(oauth);
+    await this.persistTokens(
+      tokens,
+      null,
+      accountEmail,
+    );
+    this.failureAlertAt.clear();
     this.logger.logEvent('GoogleCalendarService', 'google.oauth.completed', {
       token_expiry: tokens.expiry_date ?? null,
     });
@@ -544,6 +567,7 @@ export class GoogleCalendarService {
   private async persistTokens(
     tokens: TokenCredentials,
     fallbackRefreshToken: string | null,
+    accountEmail?: string | null,
   ): Promise<void> {
     await this.prisma.googleOAuthToken.upsert({
       where: { id: 1 },
@@ -553,6 +577,7 @@ export class GoogleCalendarService {
         scope: tokens.scope ?? undefined,
         tokenType: tokens.token_type ?? undefined,
         expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
+        accountEmail: accountEmail === undefined ? undefined : accountEmail,
       },
       create: {
         id: 1,
@@ -561,29 +586,83 @@ export class GoogleCalendarService {
         scope: tokens.scope ?? null,
         tokenType: tokens.token_type ?? null,
         expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        accountEmail: accountEmail ?? null,
       },
     });
   }
 
   private async reportFailure(event: string, error: unknown): Promise<void> {
+    const message = errorMessage(error);
     this.logger.errorEvent('GoogleCalendarService', event, {
-      error_message: errorMessage(error),
+      error_message: message,
     });
+    const authorizationExpired = isInvalidGrant(error);
+    const authorizationUnavailable =
+      authorizationExpired ||
+      message.toLowerCase().includes('google calendar is not authorized');
+    if (authorizationExpired) {
+      await this.markAuthorizationInvalid();
+    }
     const token = this.config.get<string | null>('app.telegramBotToken');
     const adminId = this.config.get<string | null>('app.adminTelegramId');
     if (!token || !adminId) return;
+    const alertKey = authorizationUnavailable
+      ? 'google.authorization.expired'
+      : event;
+    const now = Date.now();
+    const previousAlertAt = this.failureAlertAt.get(alertKey) ?? 0;
+    if (now - previousAlertAt < FAILURE_ALERT_COOLDOWN_MS) return;
+    this.failureAlertAt.set(alertKey, now);
     try {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: adminId,
-          text: `⚠️ Ошибка Google Calendar\n${event}\n${errorMessage(error)}`,
+          text: authorizationUnavailable
+            ? '⚠️ Google Calendar нужно переподключить.\nСохранённый доступ Google перестал действовать. Заявки не удалены.\n\nОткройте Mini App → Управление → Состояние помощника → Переподключить Google Calendar.'
+            : `⚠️ Ошибка Google Calendar\n${event}\n${message}`,
         }),
       });
     } catch {
       this.logger.errorEvent('GoogleCalendarService', 'google.admin_notification.failed');
     }
+  }
+
+  private async resolveAuthorizedAccountEmail(
+    oauth: ReturnType<GoogleCalendarService['createOAuthClient']>,
+  ): Promise<string> {
+    try {
+      const response = await google
+        .oauth2({ version: 'v2', auth: oauth as never })
+        .userinfo.get({}, { timeout: 10_000 });
+      const accountEmail = response.data.email?.trim().toLowerCase();
+      if (!accountEmail) {
+        throw new Error('Google account email is missing');
+      }
+      return accountEmail;
+    } catch (error: unknown) {
+      this.logger.errorEvent(
+        'GoogleCalendarService',
+        'google.oauth.account_email_failed',
+        { error_message: errorMessage(error) },
+      );
+      throw new Error(
+        'Could not verify the selected Google account. Reconnect again.',
+        { cause: error },
+      );
+    }
+  }
+
+  private async markAuthorizationInvalid(): Promise<void> {
+    await this.prisma.googleOAuthToken.updateMany({
+      where: { id: 1 },
+      data: {
+        accessToken: null,
+        refreshToken: null,
+        expiryDate: null,
+      },
+    });
   }
 
   private cleanupExpiredStates(): void {
@@ -627,4 +706,21 @@ function dateInTimeZone(value: Date, timeZone: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isInvalidGrant(error: unknown): boolean {
+  if (errorMessage(error).toLowerCase().includes('invalid_grant')) return true;
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    code?: unknown;
+    response?: { data?: { error?: unknown; error_description?: unknown } };
+  };
+  return (
+    String(candidate.code ?? '').toLowerCase() === 'invalid_grant' ||
+    String(candidate.response?.data?.error ?? '').toLowerCase() ===
+      'invalid_grant' ||
+    String(candidate.response?.data?.error_description ?? '')
+      .toLowerCase()
+      .includes('invalid_grant')
+  );
 }

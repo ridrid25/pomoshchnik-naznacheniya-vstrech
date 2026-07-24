@@ -140,6 +140,7 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(adminSettings.status, 200);
     const adminSettingsBody = await adminSettings.json();
     assert.equal(adminSettingsBody.google.authorized, false);
+    assert.equal(adminSettingsBody.google.reachable, false);
     assert.equal(adminSettingsBody.schedule.timezone, 'Europe/Moscow');
     assert.equal(adminSettingsBody.schedule.workingPeriods.length, 5);
     assert.equal(adminSettingsBody.overview.templates, 8);

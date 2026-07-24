@@ -119,6 +119,7 @@ export interface MiniAppAdminSettingsContract {
   google: {
     configured: boolean;
     authorized: boolean;
+    reachable: boolean;
     accountEmail: string | null;
     tokenExpiresAt: string | null;
   };
