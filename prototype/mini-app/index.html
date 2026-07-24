@@ -268,6 +268,11 @@
           <span><strong>Настройки расписания</strong><small>Рабочие дни, время и Google Calendar</small></span>
           <span aria-hidden="true">›</span>
         </button>
+        <button class="admin-health-entry" type="button" data-nav="admin-health">
+          <span class="health-entry-icon" aria-hidden="true">✓</span>
+          <span><strong>Состояние помощника</strong><small>Проверка, восстановление и отчёт для Codex</small></span>
+          <span aria-hidden="true">›</span>
+        </button>
         <div class="tab-control" role="tablist" aria-label="Фильтр очереди">
           <button class="is-selected" type="button" role="tab" aria-selected="true" data-admin-tab="pending">Ожидают</button>
           <button type="button" role="tab" aria-selected="false" data-admin-tab="recent">Недавние</button>
@@ -324,6 +329,33 @@
               <button type="button" data-nav="admin-templates"><span class="metric-icon teal">T</span><strong id="templateCount">0</strong><small>Шаблоны</small></button>
             </div>
             <p>Здесь можно разблокировать пользователя и изменить тексты уведомлений.</p>
+          </section>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="admin-health" aria-labelledby="adminHealthTitle">
+        <div class="page-heading">
+          <div><p class="eyebrow">Управление встречами</p><h1 id="adminHealthTitle">Состояние помощника</h1></div>
+          <span class="format-chip online">Только для вас</span>
+        </div>
+        <p class="availability-state" id="adminHealthState" role="status">Проверяем работу…</p>
+        <div class="health-dashboard is-hidden" id="adminHealthContent">
+          <article class="health-summary-card" id="healthSummaryCard"></article>
+          <div class="health-check-list" id="healthCheckList"></div>
+          <section class="health-actions-card">
+            <div class="settings-section-head">
+              <div><p class="eyebrow">Если что-то зависло</p><h2>Безопасное восстановление</h2></div>
+            </div>
+            <p>Повторит уведомления, восстановит отметки заявок в календаре и проверит связь с Telegram. Встречи и заявки не удаляются.</p>
+            <button class="primary-button full-width" id="repairAssistant" type="button" data-health-action="repair">Проверить и восстановить</button>
+            <button class="outline-button full-width" id="refreshAssistantHealth" type="button" data-health-action="refresh">Проверить ещё раз</button>
+          </section>
+          <section class="diagnostic-share-card">
+            <div class="settings-section-head">
+              <div><p class="eyebrow">Если нужна моя помощь</p><h2>Сообщение для Codex</h2></div>
+            </div>
+            <p>Кнопка подготовит и скопирует технический отчёт без паролей и личных данных.</p>
+            <button class="secondary-button full-width" id="copyDiagnostics" type="button" data-health-action="copy">Скопировать отчёт для Codex</button>
           </section>
         </div>
       </section>

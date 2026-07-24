@@ -33,6 +33,10 @@
     adminPendingCount: $('adminPendingCount'), adminDecidedToday: $('adminDecidedToday'), adminOldestWait: $('adminOldestWait'), adminReliability: $('adminReliability'), adminNavCount: $('adminNavCount'),
     adminDetailCard: $('adminDetailCard'), adminDetailActions: $('adminDetailActions'),
     adminSettingsState: $('adminSettingsState'), adminSettingsContent: $('adminSettingsContent'),
+    adminHealthState: $('adminHealthState'), adminHealthContent: $('adminHealthContent'),
+    healthSummaryCard: $('healthSummaryCard'), healthCheckList: $('healthCheckList'),
+    repairAssistant: $('repairAssistant'), refreshAssistantHealth: $('refreshAssistantHealth'),
+    copyDiagnostics: $('copyDiagnostics'),
     googleIntegrationCard: $('googleIntegrationCard'), scheduleSettingsForm: $('scheduleSettingsForm'),
     scheduleTimezone: $('scheduleTimezone'), workingPeriods: $('workingPeriods'),
     minimumLeadTimeMinutes: $('minimumLeadTimeMinutes'), bookingHorizonDays: $('bookingHorizonDays'),
@@ -61,6 +65,7 @@
     notificationChannel: 'TELEGRAM',
     adminScope: 'pending', adminBookings: [], adminSummary: { pending: 0, decidedToday: 0, aging: 0, oldestWaitingMinutes: null, reliability: null },
     selectedAdminBooking: null, pendingAdminAction: null, adminSettings: null,
+    diagnostics: null,
     workingPeriodsDraft: [],
     restrictions: [], pendingRestrictionDeleteId: null,
     blockedUsers: [], pendingUnblockUserId: null,
@@ -175,7 +180,7 @@
       screen.classList.toggle('is-active', active);
       screen.setAttribute('aria-hidden', String(!active));
     });
-    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-restrictions' || name === 'admin-blocked-users' || name === 'admin-templates' || name === 'admin-template-editor';
+    const flow = name === 'wizard' || name === 'success' || name === 'booking-detail' || name === 'admin-detail' || name === 'admin-settings' || name === 'admin-health' || name === 'admin-restrictions' || name === 'admin-blocked-users' || name === 'admin-templates' || name === 'admin-template-editor';
     elements.bottomNav.classList.toggle('is-hidden', flow);
     elements.back.classList.toggle('is-hidden', !flow);
     if (tg) flow ? tg.BackButton.show() : tg.BackButton.hide();
@@ -190,11 +195,114 @@
     if (name === 'bookings') void loadBookings();
     if (name === 'admin') void loadAdminQueue();
     if (name === 'admin-settings') void loadAdminSettings();
+    if (name === 'admin-health') void loadDiagnostics();
     if (name === 'admin-restrictions') void loadRestrictions();
     if (name === 'admin-blocked-users') void loadBlockedUsers();
     if (name === 'admin-templates') void loadTemplates();
     scrollTo({ top: 0, behavior: 'smooth' });
     requestAnimationFrame(updateScrollControls);
+  }
+
+  async function loadDiagnostics() {
+    elements.adminHealthState.textContent = 'Проверяем работу…';
+    elements.adminHealthState.classList.remove('is-hidden');
+    elements.adminHealthContent.classList.add('is-hidden');
+    try {
+      state.diagnostics = await api('/admin/diagnostics');
+      renderDiagnostics();
+    } catch (error) {
+      elements.adminHealthState.textContent = error.message || 'Не удалось выполнить проверку';
+    }
+  }
+
+  function renderDiagnostics() {
+    const report = state.diagnostics;
+    if (!report) return;
+    const stateCopy = {
+      OK: { icon: '✓', className: 'ok', text: 'Все основные функции отвечают' },
+      ATTENTION: { icon: '!', className: 'attention', text: 'Помощник работает, но один из разделов требует внимания' },
+      ERROR: { icon: '×', className: 'error', text: 'Одна из основных функций сейчас недоступна' },
+    }[report.state];
+    elements.healthSummaryCard.className = `health-summary-card ${stateCopy.className}`;
+    elements.healthSummaryCard.innerHTML = `
+      <span class="health-summary-icon" aria-hidden="true">${stateCopy.icon}</span>
+      <div><p class="eyebrow">Последняя проверка</p><h2>${escapeHtml(report.title)}</h2><p>${escapeHtml(stateCopy.text)}</p><small>${escapeHtml(formatDiagnosticTime(report.checkedAt))} · версия ${escapeHtml(report.version)}</small></div>
+    `;
+    elements.healthCheckList.innerHTML = report.checks.map((item) => {
+      const icon = item.state === 'OK' ? '✓' : item.state === 'ATTENTION' ? '!' : '×';
+      const className = item.state.toLowerCase();
+      return `<article class="health-check-card ${className}">
+        <span class="health-check-icon" aria-hidden="true">${icon}</span>
+        <div><h3>${escapeHtml(item.label)}</h3><p>${escapeHtml(item.message)}</p></div>
+      </article>`;
+    }).join('');
+    elements.adminHealthState.classList.add('is-hidden');
+    elements.adminHealthContent.classList.remove('is-hidden');
+  }
+
+  async function repairAssistant() {
+    if (elements.repairAssistant.disabled) return;
+    elements.repairAssistant.disabled = true;
+    elements.repairAssistant.setAttribute('aria-busy', 'true');
+    elements.repairAssistant.textContent = 'Проверяем и восстанавливаем…';
+    try {
+      state.diagnostics = await api('/admin/diagnostics/repair', { method: 'POST', body: '{}' });
+      renderDiagnostics();
+      const repairs = state.diagnostics.repairs;
+      const repaired = repairs.notificationRetries + repairs.calendarMarkersRestored + Number(repairs.telegramWebhookRestored);
+      showModal(
+        repaired ? 'Восстановление выполнено' : 'Проверка завершена',
+        repaired
+          ? 'Помощник повторил безопасные операции. Обновлённое состояние уже показано на экране.'
+          : 'Сбоев, которые можно исправить автоматически, не найдено.',
+        repaired ? '✓' : 'i',
+      );
+    } catch (error) {
+      showModal('Не удалось завершить проверку', error.message || 'Попробуйте ещё раз через минуту.', '!');
+    } finally {
+      elements.repairAssistant.disabled = false;
+      elements.repairAssistant.removeAttribute('aria-busy');
+      elements.repairAssistant.textContent = 'Проверить и восстановить';
+    }
+  }
+
+  async function copyDiagnostics() {
+    const text = state.diagnostics?.diagnosticText;
+    if (!text) {
+      showToast('Сначала выполните проверку');
+      return;
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        copyTextFallback(text);
+      }
+      showModal(
+        'Отчёт скопирован',
+        'Откройте задачу Codex, вставьте текст в сообщение и отправьте. В отчёте нет паролей и личных данных.',
+        '✓',
+      );
+    } catch {
+      copyTextFallback(text);
+      showModal(
+        'Отчёт подготовлен',
+        'Текст скопирован. Вставьте его в сообщение для Codex.',
+        '✓',
+      );
+    }
+  }
+
+  function copyTextFallback(text) {
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.setAttribute('readonly', '');
+    field.style.position = 'fixed';
+    field.style.opacity = '0';
+    document.body.append(field);
+    field.select();
+    document.execCommand('copy');
+    field.remove();
   }
 
   function scrollStopPositions() {
@@ -1470,6 +1578,9 @@
       return;
     }
     if (button.dataset.calendarUrl) { void openCalendarDay(button.dataset.calendarUrl, button.dataset.calendarBookingId); return; }
+    if (button.dataset.healthAction === 'repair') { void repairAssistant(); return; }
+    if (button.dataset.healthAction === 'refresh') { void loadDiagnostics(); return; }
+    if (button.dataset.healthAction === 'copy') { void copyDiagnostics(); return; }
     if (button.dataset.adminAction && button.dataset.adminId) {
       const booking = state.selectedAdminBooking?.id === button.dataset.adminId
         ? state.selectedAdminBooking
@@ -1560,6 +1671,11 @@
       'Asia/Irkutsk': 'Иркутск', 'Asia/Yakutsk': 'Якутск', 'Asia/Vladivostok': 'Владивосток',
       'Asia/Magadan': 'Магадан', 'Asia/Kamchatka': 'Камчатка',
     })[timezone] || timezone;
+  }
+  function formatDiagnosticTime(value) {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+    }).format(new Date(value)).replace(',', ' ·');
   }
   function newIdempotencyKey() { return `mini-app:${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`; }
 

@@ -12,7 +12,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   const css = readFileSync(resolve(prototypeRoot, 'styles.css'), 'utf8');
   const javascript = readFileSync(resolve(prototypeRoot, 'app.js'), 'utf8');
 
-  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings', 'admin-restrictions', 'admin-blocked-users', 'admin-templates', 'admin-template-editor']) {
+  for (const screen of ['home', 'wizard', 'success', 'bookings', 'booking-detail', 'admin', 'admin-detail', 'admin-settings', 'admin-health', 'admin-restrictions', 'admin-blocked-users', 'admin-templates', 'admin-template-editor']) {
     assert.match(html, new RegExp(`data-screen="${screen}"`, 'u'));
   }
   assert.match(html, /Запись на встречу/u);
@@ -160,6 +160,15 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(html, /Допустимые подстановки/u);
   assert.match(css, /template-card/u);
   assert.match(css, /placeholder-list/u);
+  assert.match(html, /Состояние помощника/u);
+  assert.match(html, /Проверить и восстановить/u);
+  assert.match(html, /Скопировать отчёт для Codex/u);
+  assert.match(javascript, /admin\/diagnostics/u);
+  assert.match(javascript, /admin\/diagnostics\/repair/u);
+  assert.match(javascript, /navigator\.clipboard/u);
+  assert.match(javascript, /diagnosticText/u);
+  assert.match(css, /health-summary-card/u);
+  assert.match(css, /health-check-card/u);
   assert.doesNotMatch(javascript, /серые заявки/iu);
 });
 

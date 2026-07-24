@@ -144,6 +144,34 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
     assert.equal(adminSettingsBody.schedule.workingPeriods.length, 5);
     assert.equal(adminSettingsBody.overview.templates, 8);
 
+    const diagnosticsResponse = await fetch(
+      `${origin}/api/mini-app/v1/admin/diagnostics`,
+      { headers: { cookie } },
+    );
+    assert.equal(diagnosticsResponse.status, 200);
+    const diagnostics = await diagnosticsResponse.json();
+    assert.equal(diagnostics.version, 'M11');
+    assert.equal(diagnostics.repairs.attempted, false);
+    assert.ok(Array.isArray(diagnostics.checks));
+    assert.match(diagnostics.diagnosticText, /Диагностика помощника записей/u);
+    assert.doesNotMatch(diagnostics.diagnosticText, /mini-app-test-token/u);
+
+    const repairDiagnosticsResponse = await fetch(
+      `${origin}/api/mini-app/v1/admin/diagnostics/repair`,
+      {
+        method: 'POST',
+        headers: { cookie, origin, 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
+    assert.equal(
+      repairDiagnosticsResponse.status,
+      201,
+      await repairDiagnosticsResponse.clone().text(),
+    );
+    const repairedDiagnostics = await repairDiagnosticsResponse.json();
+    assert.equal(repairedDiagnostics.repairs.attempted, true);
+
     const updatedAdminSettings = await fetch(
       `${origin}/api/mini-app/v1/admin/settings/schedule`,
       {
@@ -291,6 +319,11 @@ test('Mini App Telegram auth, session, origin and API guards', { timeout: 25_000
       { headers: { cookie: regularCookie } },
     );
     assert.equal(forbiddenAdminSettings.status, 403);
+    const forbiddenDiagnostics = await fetch(
+      `${origin}/api/mini-app/v1/admin/diagnostics`,
+      { headers: { cookie: regularCookie } },
+    );
+    assert.equal(forbiddenDiagnostics.status, 403);
 
     const weeks = await fetch(
       `${origin}/api/mini-app/v1/availability/weeks?duration=30`,

@@ -100,6 +100,15 @@ export class GoogleCalendarService {
     return token?.accountEmail?.trim() || null;
   }
 
+  async probeConnection(): Promise<boolean> {
+    const calendar = await this.authorizedCalendar();
+    await calendar.calendars.get(
+      { calendarId: this.calendarId },
+      { timeout: 10_000 },
+    );
+    return true;
+  }
+
   async getCalendarDayUrl(value: Date, timeZone: string): Promise<string> {
     const date = dateInTimeZone(value, timeZone);
     const [year, month, day] = date.split('-').map(Number);

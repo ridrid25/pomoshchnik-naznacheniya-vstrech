@@ -21,6 +21,8 @@ import { MiniAppPageController } from './mini-app-page.controller';
 import { MiniAppPreferencesController } from './mini-app-preferences.controller';
 import { MiniAppSessionController } from './mini-app-session.controller';
 import { MiniAppUserBookingsController } from './mini-app-user-bookings.controller';
+import { MiniAppDiagnosticsController } from './mini-app-diagnostics.controller';
+import { MiniAppDiagnosticsService } from './mini-app-diagnostics.service';
 
 @Module({
   imports: [AvailabilityModule, BookingsModule, GoogleCalendarModule],
@@ -37,6 +39,7 @@ import { MiniAppUserBookingsController } from './mini-app-user-bookings.controll
     MiniAppAdminRestrictionsController,
     MiniAppAdminBlockedUsersController,
     MiniAppAdminTemplatesController,
+    MiniAppDiagnosticsController,
   ],
   providers: [
     TelegramInitDataService,
@@ -45,6 +48,7 @@ import { MiniAppUserBookingsController } from './mini-app-user-bookings.controll
     MiniAppAuthGuard,
     MiniAppAdminGuard,
     MiniAppOriginGuard,
+    MiniAppDiagnosticsService,
   ],
 })
 export class MiniAppModule {}

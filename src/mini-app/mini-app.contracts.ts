@@ -180,3 +180,27 @@ export interface MiniAppAdminTemplateContract {
   }>;
   updatedAt: string;
 }
+
+export type MiniAppDiagnosticState = 'OK' | 'ATTENTION' | 'ERROR';
+
+export interface MiniAppDiagnosticCheckContract {
+  id: 'database' | 'telegram' | 'google' | 'notifications' | 'calendar' | 'queue';
+  label: string;
+  state: MiniAppDiagnosticState;
+  message: string;
+}
+
+export interface MiniAppDiagnosticsContract {
+  state: MiniAppDiagnosticState;
+  title: string;
+  checkedAt: string;
+  version: string;
+  checks: MiniAppDiagnosticCheckContract[];
+  repairs: {
+    attempted: boolean;
+    notificationRetries: number;
+    calendarMarkersRestored: number;
+    telegramWebhookRestored: boolean;
+  };
+  diagnosticText: string;
+}

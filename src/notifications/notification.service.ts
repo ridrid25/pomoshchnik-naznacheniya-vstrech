@@ -24,6 +24,13 @@ export interface UserNotificationInput {
   variables?: Record<string, string | number | null | undefined>;
 }
 
+export interface TelegramWebhookStatus {
+  configured: boolean;
+  checked: boolean;
+  reachable: boolean;
+  matchesExpectedWebhook: boolean;
+}
+
 @Injectable()
 export class NotificationService {
   private readonly telegramBot: Bot | null;
@@ -66,6 +73,67 @@ export class NotificationService {
 
   isEmailConfigured(): boolean {
     return Boolean(this.smtpTransport && this.smtpFrom);
+  }
+
+  async getTelegramWebhookStatus(
+    expectedUrl: string | null,
+    checkRemotely: boolean,
+  ): Promise<TelegramWebhookStatus> {
+    if (!this.telegramBot) {
+      return {
+        configured: false,
+        checked: false,
+        reachable: false,
+        matchesExpectedWebhook: false,
+      };
+    }
+    if (!checkRemotely || !expectedUrl) {
+      return {
+        configured: true,
+        checked: false,
+        reachable: true,
+        matchesExpectedWebhook: true,
+      };
+    }
+    try {
+      const webhook = await this.telegramBot.api.getWebhookInfo();
+      return {
+        configured: true,
+        checked: true,
+        reachable: true,
+        matchesExpectedWebhook: webhook.url === expectedUrl,
+      };
+    } catch (error: unknown) {
+      this.logger.errorEvent(
+        'NotificationService',
+        'telegram.health_check.failed',
+        { error_message: this.safeError(error) },
+      );
+      return {
+        configured: true,
+        checked: true,
+        reachable: false,
+        matchesExpectedWebhook: false,
+      };
+    }
+  }
+
+  async ensureTelegramWebhook(
+    expectedUrl: string,
+    secretToken: string,
+  ): Promise<boolean> {
+    if (!this.telegramBot) return false;
+    const status = await this.getTelegramWebhookStatus(expectedUrl, true);
+    if (status.reachable && status.matchesExpectedWebhook) return false;
+    await this.telegramBot.api.setWebhook(expectedUrl, {
+      secret_token: secretToken,
+      drop_pending_updates: false,
+    });
+    this.logger.logEvent(
+      'NotificationService',
+      'telegram.webhook.restored',
+    );
+    return true;
   }
 
   async notifyAdmin(text: string): Promise<boolean> {
