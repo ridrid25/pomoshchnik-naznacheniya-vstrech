@@ -1372,7 +1372,7 @@
         </div>
         <p>Убедитесь, что предложенное время вам подходит. В календаре найдите бледную плашку «На согласовании» с темой этой встречи.</p>
         <button class="calendar-review-button" type="button" data-calendar-url="${escapeHtml(calendarUrl)}" data-calendar-booking-id="${escapeHtml(bookingId)}"><span>Открыть Google Calendar</span><span aria-hidden="true">↗</span></button>
-        <span class="calendar-review-note">В календаре нажмите встречу, затем ссылку «Открыть заявку и принять решение в Telegram».</span>
+        <span class="calendar-review-note">В календаре нажмите встречу, затем яркую строку «🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить».</span>
       </section>`;
   }
 

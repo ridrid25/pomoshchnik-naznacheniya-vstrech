@@ -230,7 +230,7 @@ async function main(): Promise<void> {
     assert.ok(!pendingDescriptions[0].includes('/admin/review/'));
     assert.match(
       pendingDescriptions[0],
-      /нажмите ниже «Просмотреть источник»/u,
+      /нажмите ниже яркую строку «🔴 ОТКРЫТЬ ЗАЯВКУ/u,
     );
     assert.doesNotMatch(pendingDescriptions[0], /https:\/\/t\.me\//u);
     assert.match(
@@ -241,7 +241,10 @@ async function main(): Promise<void> {
       await service.ensureCalendarReturnLink(first.id),
       /^https:\/\/t\.me\/Zapiscalender_bot\?start=calendar_/u,
     );
-    assert.match(updatedDescriptions[0], /нажмите ниже «Просмотреть источник»/u);
+    assert.match(
+      updatedDescriptions[0],
+      /нажмите ниже яркую строку «🔴 ОТКРЫТЬ ЗАЯВКУ/u,
+    );
     assert.ok(!updatedDescriptions[0].includes('/admin/review/'));
     assert.doesNotMatch(updatedDescriptions[0], /https:\/\/t\.me\//u);
     assert.match(

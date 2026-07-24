@@ -333,7 +333,9 @@ export class GoogleCalendarService {
           visibility: 'private',
           source: input.sourceUrl
             ? {
-                title: input.sourceTitle || 'Подтвердить или отклонить заявку',
+                title:
+                  input.sourceTitle ||
+                  '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
                 url: input.sourceUrl,
               }
             : undefined,
@@ -380,7 +382,9 @@ export class GoogleCalendarService {
           visibility: 'private',
           source: input.sourceUrl
             ? {
-                title: input.sourceTitle || 'Подтвердить или отклонить заявку',
+                title:
+                  input.sourceTitle ||
+                  '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
                 url: input.sourceUrl,
               }
             : undefined,

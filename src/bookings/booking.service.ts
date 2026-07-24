@@ -581,7 +581,7 @@ export class BookingService {
         title: booking.title,
         description: this.pendingCalendarDescription(booking),
         sourceUrl: reviewUrl ?? undefined,
-        sourceTitle: 'Подтвердить или отклонить заявку',
+        sourceTitle: '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
         startAt: booking.startAt,
         endAt: new Date(
           booking.startAt.getTime() + booking.durationMinutes * 60_000,
@@ -647,7 +647,7 @@ export class BookingService {
       description,
       reviewUrl
         ? {
-            title: 'Подтвердить или отклонить заявку',
+            title: '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
             url: reviewUrl,
           }
         : null,
@@ -665,7 +665,7 @@ export class BookingService {
       '⏳ Статус: заявка ожидает вашего решения.',
       'Эта бледная запись не помечает вас занятой в Google Calendar.',
       '',
-      '🔐 Чтобы подтвердить или отклонить заявку, нажмите ниже «Просмотреть источник».',
+      '👇 Чтобы принять решение, нажмите ниже яркую строку «🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить».',
       '',
       booking.comment,
       `Telegram: ${booking.user.telegramDisplayName}`,

@@ -125,7 +125,7 @@ async function main(): Promise<void> {
       endAt: new Date('2030-01-15T08:30:00.000Z'),
       timezone: 'Europe/Moscow',
       sourceUrl: 'https://meeting.example.com/admin/review/signed-token',
-      sourceTitle: 'Подтвердить или отклонить заявку',
+      sourceTitle: '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
     });
     assert.equal(pending.googleEventId, 'google-stage5-event-1');
     const pendingInsert = calls.find((call) => {
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     assert.equal(pendingBody.attendees, undefined);
     assert.equal(pendingBody.conferenceData, undefined);
     assert.deepEqual(pendingBody.source, {
-      title: 'Подтвердить или отклонить заявку',
+      title: '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
       url: 'https://meeting.example.com/admin/review/signed-token',
     });
 
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
       pending.googleEventId,
       '← Открыть встречу в Telegram:\nhttps://t.me/example_bot?start=calendar_booking',
       {
-        title: 'Подтвердить или отклонить заявку',
+        title: '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
         url: 'https://meeting.example.com/admin/review/signed-token',
       },
     );
@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     assert.deepEqual(
       (descriptionPatch?.params.requestBody as { source?: unknown }).source,
       {
-        title: 'Подтвердить или отклонить заявку',
+        title: '🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить',
         url: 'https://meeting.example.com/admin/review/signed-token',
       },
     );

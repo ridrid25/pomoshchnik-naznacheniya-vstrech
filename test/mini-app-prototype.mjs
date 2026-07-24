@@ -90,7 +90,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /Ранее занятое время выбрали в 2 из 9 заявок/u);
   assert.match(css, /reliability-card/u);
   assert.match(css, /reliability-progress/u);
-  assert.match(javascript, /Открыть заявку и принять решение в Telegram/u);
+  assert.match(
+    javascript,
+    /🔴 ОТКРЫТЬ ЗАЯВКУ — подтвердить или отклонить/u,
+  );
   assert.match(javascript, /calendar-return/u);
   assert.doesNotMatch(javascript, /Возврат уже добавлен/u);
   assert.match(javascript, /window\.location\.assign\(url\.toString\(\)\)/u);
