@@ -54,6 +54,7 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(javascript, /Календарь временно недоступен/u);
   assert.match(css, /availability-outage/u);
   assert.match(css, /hero-card\.is-unavailable/u);
+  assert.match(css, /wizard-actions \.primary-button:disabled/u);
   assert.match(javascript, /idempotencyKey/u);
   assert.match(javascript, /tgWebAppData/u);
   assert.match(javascript, /telegramInitData/u);
