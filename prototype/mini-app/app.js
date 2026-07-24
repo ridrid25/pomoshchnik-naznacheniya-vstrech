@@ -35,6 +35,7 @@
     adminSettingsState: $('adminSettingsState'), adminSettingsContent: $('adminSettingsContent'),
     adminHealthState: $('adminHealthState'), adminHealthContent: $('adminHealthContent'),
     healthSummaryCard: $('healthSummaryCard'), healthCheckList: $('healthCheckList'),
+    calendarReconnectAction: $('calendarReconnectAction'),
     repairAssistant: $('repairAssistant'), refreshAssistantHealth: $('refreshAssistantHealth'),
     copyDiagnostics: $('copyDiagnostics'), diagnosticReport: $('diagnosticReport'),
     diagnosticReportText: $('diagnosticReportText'),
@@ -237,6 +238,11 @@
         <div><h3>${escapeHtml(item.label)}</h3><p>${escapeHtml(item.message)}</p></div>
       </article>`;
     }).join('');
+    const googleCheck = report.checks.find((item) => item.id === 'google');
+    elements.calendarReconnectAction.classList.toggle(
+      'is-hidden',
+      !googleCheck || googleCheck.state === 'OK',
+    );
     elements.adminHealthState.classList.add('is-hidden');
     elements.adminHealthContent.classList.remove('is-hidden');
   }

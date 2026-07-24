@@ -169,6 +169,10 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(html, /id="diagnosticReportText"/u);
   assert.match(javascript, /admin\/diagnostics/u);
   assert.match(javascript, /admin\/diagnostics\/repair/u);
+  assert.match(html, /id="calendarReconnectAction"/u);
+  assert.match(html, /href="\/google\/oauth\/start"/u);
+  assert.match(html, /Переподключить Google Calendar/u);
+  assert.match(css, /calendar-reconnect-action/u);
   assert.match(javascript, /navigator\.clipboard/u);
   assert.match(javascript, /diagnosticText/u);
   assert.match(javascript, /setSelectionRange/u);
