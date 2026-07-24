@@ -20,6 +20,8 @@
     dayGrid: $('dayGrid'), morning: $('morningSlots'), afternoon: $('afternoonSlots'),
     morningFieldset: $('morningFieldset'), afternoonFieldset: $('afternoonFieldset'),
     availabilityNote: $('availabilityNote'), availabilityState: $('availabilityState'), weekLabel: $('weekLabel'),
+    availabilityOutage: $('availabilityOutage'), retryAvailability: $('retryAvailability'),
+    openAssistantHealth: $('openAssistantHealth'),
     previousWeek: $('previousWeek'), nextWeek: $('nextWeek'),
     bookingList: $('bookingList'), bookingsState: $('bookingsState'), bookingsCount: $('bookingsCount'),
     bookingsScopeHint: $('bookingsScopeHint'),
@@ -58,7 +60,7 @@
 
   const state = {
     screen: 'home', history: [], step: 1, user: null,
-    format: 'Онлайн', duration: '30', weeks: [], weekIndex: 0,
+    format: 'Онлайн', duration: '30', weeks: [], weekIndex: 0, availabilityUnavailable: false,
     dates: [], date: null, slot: null, timezone: 'Europe/Moscow',
     idempotencyKey: newIdempotencyKey(), submitting: false,
     bookingScope: 'active', bookingCounts: { active: 0, archive: 0 },
@@ -149,6 +151,7 @@
       initializeNotificationPreferences();
       body.classList.add('live-mode');
       body.classList.toggle('admin-mode', session.user.role === 'ADMIN');
+      elements.openAssistantHealth.classList.toggle('is-hidden', session.user.role !== 'ADMIN');
       elements.boot.classList.add('is-ready');
       if (session.user.role === 'ADMIN') void loadAdminQueue();
       await openStartDestination();
@@ -400,18 +403,22 @@
       : 'Продолжить';
     if (state.step === 2) await loadAvailability();
     if (state.step === 4) updateReview();
+    updateWizardNextState();
     scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function loadAvailability() {
     setAvailabilityState('Загружаем свободные даты…');
+    setAvailabilityOutage(false);
+    state.availabilityUnavailable = false;
     state.slot = null;
+    updateWizardNextState();
     try {
       state.weeks = (await api(`/availability/weeks?duration=${state.duration}`)).weeks;
       state.weekIndex = Math.min(state.weekIndex, Math.max(0, state.weeks.length - 1));
       await loadWeek();
     } catch (error) {
-      setAvailabilityState(error.message || 'Не удалось загрузить расписание', true);
+      showAvailabilityOutage();
     }
   }
 
@@ -422,7 +429,10 @@
     if (!week) {
       elements.weekLabel.textContent = 'Нет доступных недель';
       renderDates([]);
-      return setAvailabilityState('Свободных дат пока нет', true);
+      renderSlots([]);
+      setAvailabilityState('Свободных дат в ближайшее время нет', true);
+      updateWizardNextState();
+      return;
     }
     elements.weekLabel.textContent = `${formatShortDate(week.startDate)}–${formatShortDate(week.endDate)}`;
     setAvailabilityState('Загружаем даты…');
@@ -430,7 +440,11 @@
     state.date = state.dates.includes(state.date) ? state.date : state.dates[0] || null;
     renderDates(state.dates);
     if (state.date) await loadSlots();
-    else setAvailabilityState('На этой неделе свободных дат нет', true);
+    else {
+      renderSlots([]);
+      setAvailabilityState('На этой неделе свободных дат нет', true);
+      updateWizardNextState();
+    }
   }
 
   function renderDates(dates) {
@@ -459,8 +473,9 @@
       elements.availabilityNote.innerHTML = `<span></span>Доступно ${slots.length} ${plural(slots.length, 'окно', 'окна', 'окон')} · ${timezoneLabel(state.timezone)}`;
       setAvailabilityState('', false);
       if (!slots.length) setAvailabilityState('На эту дату свободных окон нет', true);
+      updateWizardNextState();
     } catch (error) {
-      setAvailabilityState(error.message || 'Не удалось загрузить время', true);
+      showAvailabilityOutage();
     }
   }
 
@@ -489,12 +504,38 @@
     elements.availabilityState.classList.toggle('is-hidden', !visible || !message);
   }
 
+  function setAvailabilityOutage(visible) {
+    elements.availabilityOutage.classList.toggle('is-hidden', !visible);
+  }
+
+  function showAvailabilityOutage() {
+    state.availabilityUnavailable = true;
+    state.weeks = [];
+    state.dates = [];
+    state.date = null;
+    state.slot = null;
+    elements.weekLabel.textContent = 'Календарь временно недоступен';
+    elements.previousWeek.disabled = true;
+    elements.nextWeek.disabled = true;
+    renderDates([]);
+    renderSlots([]);
+    setAvailabilityState('', false);
+    setAvailabilityOutage(true);
+    updateWizardNextState();
+  }
+
+  function updateWizardNextState() {
+    elements.next.disabled =
+      state.step === 2 && (!state.slot || state.availabilityUnavailable);
+  }
+
   function selectChoice(button) {
     const group = button.closest('[data-choice-group]');
     if (!group) return;
     if (button.dataset.startAt) {
       state.slot = { startAt: button.dataset.startAt, time: button.dataset.value, timezone: state.timezone };
       [elements.morning, elements.afternoon].forEach((container) => container.querySelectorAll('button').forEach((choice) => setSelected(choice, choice === button)));
+      updateWizardNextState();
     } else if (button.dataset.date) {
       state.date = button.dataset.date;
       elements.dayGrid.querySelectorAll('button').forEach((choice) => setSelected(choice, choice === button));
@@ -1558,6 +1599,7 @@
     if (!button) return;
     if (button === elements.previousWeek) { state.weekIndex -= 1; void loadWeek(); return; }
     if (button === elements.nextWeek) { state.weekIndex += 1; void loadWeek(); return; }
+    if (button === elements.retryAvailability) { void loadAvailability(); return; }
     if (button.dataset.nav) { showScreen(button.dataset.nav); return; }
     if (button.dataset.action === 'start-booking') {
       state.rescheduleOriginal = null;

@@ -45,6 +45,11 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(css, /\.bottom-nav button \{ font-size: var\(--type-caption\)/u);
   assert.match(javascript, /setWizardStep/u);
   assert.match(javascript, /availability\/slots/u);
+  assert.match(html, /Запись временно недоступна/u);
+  assert.match(html, /id="retryAvailability"/u);
+  assert.match(javascript, /showAvailabilityOutage/u);
+  assert.match(javascript, /updateWizardNextState/u);
+  assert.match(css, /availability-outage/u);
   assert.match(javascript, /idempotencyKey/u);
   assert.match(javascript, /tgWebAppData/u);
   assert.match(javascript, /telegramInitData/u);

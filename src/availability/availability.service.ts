@@ -25,6 +25,17 @@ export interface AvailableWeek {
   endDate: string;
 }
 
+export interface AvailabilityQueryOptions {
+  throwOnCalendarUnavailable?: boolean;
+}
+
+export class AvailabilityCalendarUnavailableError extends Error {
+  constructor() {
+    super('Google Calendar is unavailable');
+    this.name = 'AvailabilityCalendarUnavailableError';
+  }
+}
+
 interface DateParts {
   year: number;
   month: number;
@@ -55,6 +66,7 @@ export class AvailabilityService {
   async getAvailableWeeks(
     durationMinutes: number,
     now = new Date(),
+    options: AvailabilityQueryOptions = {},
   ): Promise<AvailableWeek[]> {
     assertDuration(durationMinutes);
     const settings = await this.loadSettings();
@@ -71,6 +83,9 @@ export class AvailabilityService {
       );
     } catch {
       this.logRejectedDate(today, durationMinutes, 'google_calendar_unavailable');
+      if (options.throwOnCalendarUnavailable) {
+        throw new AvailabilityCalendarUnavailableError();
+      }
       return [];
     }
 
@@ -80,6 +95,7 @@ export class AvailabilityService {
         offset,
         now,
         googleBusy,
+        options,
       );
       if (dates.length > 0) {
         const startDate = mondayOfWeek(addDays(today, offset * 7));
@@ -108,6 +124,7 @@ export class AvailabilityService {
     weekOffset: number,
     now = new Date(),
     googleBusyOverride?: BusyIntervalLike[],
+    options: AvailabilityQueryOptions = {},
   ): Promise<string[]> {
     assertDuration(durationMinutes);
     if (!Number.isInteger(weekOffset) || weekOffset < 0) return [];
@@ -130,6 +147,9 @@ export class AvailabilityService {
           durationMinutes,
           'google_calendar_unavailable',
         );
+        if (options.throwOnCalendarUnavailable) {
+          throw new AvailabilityCalendarUnavailableError();
+        }
         return [];
       }
     }
@@ -145,6 +165,7 @@ export class AvailabilityService {
         now,
         undefined,
         googleBusy,
+        options,
       );
       if (slots.length > 0) dates.push(date);
     }
@@ -168,6 +189,7 @@ export class AvailabilityService {
     now = new Date(),
     excludeBookingId?: string,
     googleBusyOverride?: BusyIntervalLike[],
+    options: AvailabilityQueryOptions = {},
   ): Promise<AvailableSlot[]> {
     assertDate(date);
     assertDuration(durationMinutes);
@@ -206,6 +228,9 @@ export class AvailabilityService {
         );
       } catch {
         this.logRejectedDate(date, durationMinutes, 'google_calendar_unavailable');
+        if (options.throwOnCalendarUnavailable) {
+          throw new AvailabilityCalendarUnavailableError();
+        }
         return [];
       }
     }

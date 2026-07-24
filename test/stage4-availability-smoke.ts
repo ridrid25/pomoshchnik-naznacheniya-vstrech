@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 
-import { AvailabilityService } from '../src/availability/availability.service';
+import {
+  AvailabilityCalendarUnavailableError,
+  AvailabilityService,
+} from '../src/availability/availability.service';
 import { createPrismaClient } from '../src/database/prisma-client.factory';
 import { ensureDefaultData } from '../src/database/default-data';
 import { PrismaService } from '../src/database/prisma.service';
@@ -45,6 +48,22 @@ async function main(): Promise<void> {
       googleBusyRequestCount,
       1,
       'Week menu must use one batched Google free/busy request',
+    );
+    const unavailableAvailability = new AvailabilityService(
+      prisma as unknown as PrismaService,
+      new JsonLoggerService(),
+      {
+        getBusyIntervals: async () => {
+          throw new Error('invalid_grant');
+        },
+      } as unknown as GoogleCalendarService,
+    );
+    await assert.rejects(
+      unavailableAvailability.getAvailableWeeks(30, now, {
+        throwOnCalendarUnavailable: true,
+      }),
+      AvailabilityCalendarUnavailableError,
+      'Mini App must distinguish a broken calendar from a genuinely empty schedule',
     );
 
     const initialSlots = await availability.getAvailableSlots(monday, 30, now);
@@ -220,6 +239,7 @@ async function main(): Promise<void> {
         horizon_checked: true,
         timezone_checked: true,
         google_busy_checked: true,
+        google_unavailable_checked: true,
       })}\n`,
     );
   } finally {

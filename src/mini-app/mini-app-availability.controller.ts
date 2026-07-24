@@ -3,10 +3,14 @@ import {
   Controller,
   Get,
   Query,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 
-import { AvailabilityService } from '../availability/availability.service';
+import {
+  AvailabilityCalendarUnavailableError,
+  AvailabilityService,
+} from '../availability/availability.service';
 import { MiniAppAuthGuard } from './auth/mini-app-auth.guard';
 import type {
   MiniAppSlotContract,
@@ -23,7 +27,13 @@ export class MiniAppAvailabilityController {
     @Query('duration') durationRaw?: string,
   ): Promise<{ weeks: MiniAppWeekContract[] }> {
     const duration = parseDuration(durationRaw);
-    return { weeks: await this.availability.getAvailableWeeks(duration) };
+    return {
+      weeks: await this.calendarAware(() =>
+        this.availability.getAvailableWeeks(duration, new Date(), {
+          throwOnCalendarUnavailable: true,
+        }),
+      ),
+    };
   }
 
   @Get('dates')
@@ -34,7 +44,15 @@ export class MiniAppAvailabilityController {
     const duration = parseDuration(durationRaw);
     const weekOffset = parseWeekOffset(weekOffsetRaw);
     return {
-      dates: await this.availability.getAvailableDates(duration, weekOffset),
+      dates: await this.calendarAware(() =>
+        this.availability.getAvailableDates(
+          duration,
+          weekOffset,
+          new Date(),
+          undefined,
+          { throwOnCalendarUnavailable: true },
+        ),
+      ),
     };
   }
 
@@ -47,7 +65,16 @@ export class MiniAppAvailabilityController {
     if (!date || !isCalendarDate(date)) {
       throw new BadRequestException('date must use YYYY-MM-DD format');
     }
-    const slots = await this.availability.getAvailableSlots(date, duration);
+    const slots = await this.calendarAware(() =>
+      this.availability.getAvailableSlots(
+        date,
+        duration,
+        new Date(),
+        undefined,
+        undefined,
+        { throwOnCalendarUnavailable: true },
+      ),
+    );
     const timezone = await this.availability.getTimezone();
     return {
       slots: slots.map((slot) => ({
@@ -58,6 +85,21 @@ export class MiniAppAvailabilityController {
         timezone,
       })),
     };
+  }
+
+  private async calendarAware<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      if (error instanceof AvailabilityCalendarUnavailableError) {
+        throw new ServiceUnavailableException({
+          code: 'GOOGLE_CALENDAR_UNAVAILABLE',
+          message:
+            'Запись временно недоступна: не удалось проверить свободное время в Google Calendar.',
+        });
+      }
+      throw error;
+    }
   }
 }
 
