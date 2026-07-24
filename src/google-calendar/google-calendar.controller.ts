@@ -19,13 +19,16 @@ export class GoogleCalendarController {
 
   @Get('start')
   @Redirect()
-  startAuthorization() {
+  async startAuthorization() {
     if (!this.googleCalendar.isConfigured()) {
       throw new BadRequestException(
         'Google OAuth is not configured. Fill GOOGLE_OAUTH_* in .env.',
       );
     }
-    return { url: this.googleCalendar.createAuthorizationUrl() };
+    const accountEmail = await this.googleCalendar.getAccountEmail();
+    return {
+      url: this.googleCalendar.createAuthorizationUrl(accountEmail),
+    };
   }
 
   @Get('callback')

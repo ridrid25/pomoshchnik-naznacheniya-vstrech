@@ -104,9 +104,18 @@ async function main(): Promise<void> {
       authorized: true,
       tokenExpiresAt: '2030-01-01T00:00:00.000Z',
     });
-    const authorizationUrl = new URL(service.createAuthorizationUrl());
+    const authorizationUrl = new URL(
+      service.createAuthorizationUrl(await service.getAccountEmail()),
+    );
     assert.equal(authorizationUrl.searchParams.get('access_type'), 'offline');
-    assert.equal(authorizationUrl.searchParams.get('prompt'), 'consent');
+    assert.equal(
+      authorizationUrl.searchParams.get('prompt'),
+      'select_account consent',
+    );
+    assert.equal(
+      authorizationUrl.searchParams.get('login_hint'),
+      'owner@example.com',
+    );
     assert.ok(authorizationUrl.searchParams.get('state'));
 
     const busy = await service.getBusyIntervals(

@@ -657,8 +657,12 @@ export class BotFlowService implements OnModuleInit, OnModuleDestroy {
       const googleStatus = await this.googleCalendar.getStatus();
       const keyboard = new InlineKeyboard();
       if (googleStatus.configured && !googleStatus.authorized) {
+        const accountEmail = await this.googleCalendar.getAccountEmail();
         keyboard
-          .url('🔗 Подключить Google Calendar', this.googleCalendar.createAuthorizationUrl())
+          .url(
+            '🔗 Подключить Google Calendar',
+            this.googleCalendar.createAuthorizationUrl(accountEmail),
+          )
           .row();
       }
       keyboard.text('← Назад', 'admin:menu');

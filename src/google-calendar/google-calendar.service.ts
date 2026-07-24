@@ -120,7 +120,7 @@ export class GoogleCalendarService {
     return url.toString();
   }
 
-  createAuthorizationUrl(): string {
+  createAuthorizationUrl(loginHint?: string | null): string {
     const oauth = this.createOAuthClient();
     const state = randomBytes(32).toString('hex');
     this.oauthStates.set(state, Date.now() + OAUTH_STATE_TTL_MS);
@@ -128,8 +128,9 @@ export class GoogleCalendarService {
     this.logger.logEvent('GoogleCalendarService', 'google.oauth.started');
     return oauth.generateAuthUrl({
       access_type: 'offline',
-      prompt: 'consent',
+      prompt: 'select_account consent',
       include_granted_scopes: true,
+      login_hint: loginHint?.trim() || undefined,
       scope: [GOOGLE_CALENDAR_SCOPE],
       state,
     });
