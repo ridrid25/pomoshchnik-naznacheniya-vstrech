@@ -15,6 +15,8 @@
   const elements = {
     boot: $('bootPanel'), bootTitle: $('bootTitle'), bootText: $('bootText'), telegram: $('telegramButton'),
     bottomNav: document.querySelector('.bottom-nav'), back: $('backButton'), theme: $('themeButton'),
+    homeHeroCard: $('homeHeroCard'), homeScheduleStatus: $('homeScheduleStatus'),
+    homeScheduleText: $('homeScheduleText'), homeStartBooking: $('homeStartBooking'),
     next: $('wizardNext'), previous: $('wizardBack'), form: $('bookingForm'), toast: $('toast'),
     modal: $('modalBackdrop'), modalClose: $('modalClose'), modalTitle: $('modalTitle'), modalText: $('modalText'), modalIcon: $('modalIcon'),
     dayGrid: $('dayGrid'), morning: $('morningSlots'), afternoon: $('afternoonSlots'),
@@ -155,6 +157,7 @@
       elements.boot.classList.add('is-ready');
       if (session.user.role === 'ADMIN') void loadAdminQueue();
       await openStartDestination();
+      void loadHomeScheduleStatus();
       requestAnimationFrame(updateScrollControls);
     } catch (error) {
       elements.boot.classList.add('is-error');
@@ -502,6 +505,29 @@
   function setAvailabilityState(message, visible = true) {
     elements.availabilityState.textContent = message;
     elements.availabilityState.classList.toggle('is-hidden', !visible || !message);
+  }
+
+  async function loadHomeScheduleStatus() {
+    try {
+      const { weeks } = await api('/availability/weeks?duration=30');
+      const open = weeks.length > 0;
+      elements.homeHeroCard.classList.toggle('is-unavailable', !open);
+      elements.homeScheduleStatus.textContent = open
+        ? 'Расписание открыто'
+        : 'Свободного времени пока нет';
+      elements.homeScheduleText.textContent = open
+        ? 'Онлайн в Google Meet или личная встреча — свободные окна уже учтены.'
+        : 'В ближайшее время свободных окон нет. Можно проверить расписание позже.';
+      elements.homeStartBooking.querySelector('span').textContent = open
+        ? 'Записаться'
+        : 'Проверить даты';
+    } catch {
+      elements.homeHeroCard.classList.add('is-unavailable');
+      elements.homeScheduleStatus.textContent = 'Календарь временно недоступен';
+      elements.homeScheduleText.textContent =
+        'Сейчас не получается проверить свободное время. Откройте запись, чтобы повторить проверку.';
+      elements.homeStartBooking.querySelector('span').textContent = 'Проверить запись';
+    }
   }
 
   function setAvailabilityOutage(visible) {

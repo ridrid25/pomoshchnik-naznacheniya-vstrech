@@ -357,6 +357,20 @@ html[data-theme="dark"] .theme-moon {
   box-shadow: 0 0 0 4px rgba(106, 240, 201, 0.14);
 }
 
+.hero-card.is-unavailable {
+  background:
+    radial-gradient(circle at 85% 16%, rgba(255, 255, 255, 0.2), transparent 26%),
+    linear-gradient(145deg, #5f557c 0%, #765f8e 54%, #9a5f69 110%);
+}
+.hero-card.is-unavailable .status-pill {
+  border-color: rgba(255, 226, 156, 0.35);
+  background: rgba(70, 37, 57, 0.26);
+}
+.hero-card.is-unavailable .status-dot {
+  background: #ffd06c;
+  box-shadow: 0 0 0 4px rgba(255, 208, 108, 0.16);
+}
+
 .primary-button,
 .secondary-button,
 .danger-button,
