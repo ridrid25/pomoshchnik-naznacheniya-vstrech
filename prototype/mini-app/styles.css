@@ -790,6 +790,24 @@ html[data-theme="dark"] .theme-moon {
 .health-actions-card,
 .diagnostic-share-card { display: grid; gap: 12px; }
 .health-actions-card .outline-button { margin-top: -3px; }
+.diagnostic-report {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  border-radius: var(--radius-lg);
+  background: var(--primary-soft);
+}
+.diagnostic-report label { font-size: 14px; font-weight: 750; }
+.diagnostic-report textarea {
+  min-height: 220px;
+  background: var(--surface-solid);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.diagnostic-report p { color: var(--text-soft); font-size: 13px; line-height: 1.45; }
 
 .stepper {
   display: grid;

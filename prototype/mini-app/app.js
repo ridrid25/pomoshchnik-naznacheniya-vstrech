@@ -36,7 +36,8 @@
     adminHealthState: $('adminHealthState'), adminHealthContent: $('adminHealthContent'),
     healthSummaryCard: $('healthSummaryCard'), healthCheckList: $('healthCheckList'),
     repairAssistant: $('repairAssistant'), refreshAssistantHealth: $('refreshAssistantHealth'),
-    copyDiagnostics: $('copyDiagnostics'),
+    copyDiagnostics: $('copyDiagnostics'), diagnosticReport: $('diagnosticReport'),
+    diagnosticReportText: $('diagnosticReportText'),
     googleIntegrationCard: $('googleIntegrationCard'), scheduleSettingsForm: $('scheduleSettingsForm'),
     scheduleTimezone: $('scheduleTimezone'), workingPeriods: $('workingPeriods'),
     minimumLeadTimeMinutes: $('minimumLeadTimeMinutes'), bookingHorizonDays: $('bookingHorizonDays'),
@@ -251,10 +252,16 @@
       const repairs = state.diagnostics.repairs;
       const repaired = repairs.notificationRetries + repairs.calendarMarkersRestored + Number(repairs.telegramWebhookRestored);
       showModal(
-        repaired ? 'Восстановление выполнено' : 'Проверка завершена',
+        repaired
+          ? 'Восстановление выполнено'
+          : state.diagnostics.state === 'OK'
+            ? 'Проверка завершена'
+            : 'Нужна ручная помощь',
         repaired
           ? 'Помощник повторил безопасные операции. Обновлённое состояние уже показано на экране.'
-          : 'Сбоев, которые можно исправить автоматически, не найдено.',
+          : state.diagnostics.state === 'OK'
+            ? 'Сбоев, которые можно исправить автоматически, не найдено.'
+            : 'Автоматическое восстановление не помогло. Подготовьте отчёт для Codex в нижнем блоке — он подскажет точное исправление.',
         repaired ? '✓' : 'i',
       );
     } catch (error) {
@@ -272,23 +279,30 @@
       showToast('Сначала выполните проверку');
       return;
     }
+    elements.diagnosticReportText.value = text;
+    elements.diagnosticReport.classList.remove('is-hidden');
+    elements.diagnosticReportText.focus();
+    elements.diagnosticReportText.select();
+    elements.diagnosticReportText.setSelectionRange(0, text.length);
+    let copied = false;
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
+        copied = true;
       } else {
         copyTextFallback(text);
+        copied = true;
       }
       showModal(
-        'Отчёт скопирован',
-        'Откройте задачу Codex, вставьте текст в сообщение и отправьте. В отчёте нет паролей и личных данных.',
+        copied ? 'Отчёт подготовлен' : 'Отчёт открыт',
+        'Текст показан на экране ниже и, если телефон разрешил, уже скопирован. Вставьте его в задачу Codex. Паролей и личных данных в нём нет.',
         '✓',
       );
     } catch {
-      copyTextFallback(text);
       showModal(
-        'Отчёт подготовлен',
-        'Текст скопирован. Вставьте его в сообщение для Codex.',
-        '✓',
+        'Отчёт открыт',
+        'Текст показан в поле ниже. Нажмите на него и удерживайте палец, затем выберите «Копировать».',
+        'i',
       );
     }
   }

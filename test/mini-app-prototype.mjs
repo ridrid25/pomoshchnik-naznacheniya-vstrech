@@ -162,11 +162,14 @@ test('Mini App prototype contains the approved screens and product decisions', (
   assert.match(css, /placeholder-list/u);
   assert.match(html, /Состояние помощника/u);
   assert.match(html, /Проверить и восстановить/u);
-  assert.match(html, /Скопировать отчёт для Codex/u);
+  assert.match(html, /Подготовить отчёт для Codex/u);
+  assert.match(html, /id="diagnosticReportText"/u);
   assert.match(javascript, /admin\/diagnostics/u);
   assert.match(javascript, /admin\/diagnostics\/repair/u);
   assert.match(javascript, /navigator\.clipboard/u);
   assert.match(javascript, /diagnosticText/u);
+  assert.match(javascript, /setSelectionRange/u);
+  assert.match(javascript, /Нужна ручная помощь/u);
   assert.match(css, /health-summary-card/u);
   assert.match(css, /health-check-card/u);
   assert.doesNotMatch(javascript, /серые заявки/iu);

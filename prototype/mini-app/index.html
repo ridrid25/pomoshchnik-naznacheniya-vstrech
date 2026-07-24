@@ -355,7 +355,12 @@
               <div><p class="eyebrow">Если нужна моя помощь</p><h2>Сообщение для Codex</h2></div>
             </div>
             <p>Кнопка подготовит и скопирует технический отчёт без паролей и личных данных.</p>
-            <button class="secondary-button full-width" id="copyDiagnostics" type="button" data-health-action="copy">Скопировать отчёт для Codex</button>
+            <button class="secondary-button full-width" id="copyDiagnostics" type="button" data-health-action="copy">Подготовить отчёт для Codex</button>
+            <div class="diagnostic-report is-hidden" id="diagnosticReport">
+              <label for="diagnosticReportText">Готовый текст</label>
+              <textarea id="diagnosticReportText" readonly rows="12"></textarea>
+              <p>Если текст не скопировался автоматически, нажмите на поле и удерживайте палец, затем выберите «Копировать».</p>
+            </div>
           </section>
         </div>
       </section>
